@@ -1,0 +1,12 @@
+target/
+data/
+data-smoke/
+config.toml
+.git/
+.github/
+dist/
+docs/ui-shots/
+*.zip
+*.tar.gz
+*.log
+.agent-teams/

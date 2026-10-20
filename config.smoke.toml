@@ -1,0 +1,6 @@
+listen = "127.0.0.1:18080"
+password = "smoke-test-pass"
+refresh_interval = "6h"
+fetch_timeout = "10s"
+fetch_concurrency = 4
+data_dir = "data-smoke"

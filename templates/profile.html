@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{% if is_new %}新建方案{% else %}编辑方案{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{% if is_new %}新建方案{% else %}导出配置 · {{ name }}{% endif %}</h1>
+  <p class="hint">
+    勾选「哪些上游 + 哪些分组 + 哪些规则」，合并为一份实际使用的配置文件。
+    <strong>全部规则都会写进 rules，顺序为：强制覆盖 → 普通规则 → 兜底。</strong>
+  </p>
+</div>
+
+{% include "partials/form_errors.html" %}
+
+<form method="post" action="{% if is_new %}/profiles/new{% else %}/profiles/{{ slug }}{% endif %}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="revision" value="{{ revision }}">
+
+  <div class="card">
+    <div class="form-grid">
+      <div class="field">
+        <label for="p-name">方案名 <span class="req" aria-hidden="true">*</span></label>
+        <input id="p-name" type="text" name="name" value="{{ form.value("", "name", name) }}" required placeholder="家庭网络"{% if form.invalid("", "name") %} aria-invalid="true" aria-describedby="p-name-error"{% endif %}>
+        {% if form.invalid("", "name") %}<p class="field-error" id="p-name-error">{{ form.error("", "name") }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="p-slug">slug（订阅地址里用）</label>
+        {% if is_new %}
+        <input id="p-slug" type="text" name="slug" placeholder="home" value="{{ form.value("", "slug", "") }}" aria-describedby="p-slug-hint-new{% if form.invalid("", "slug") %} p-slug-error{% endif %}"{% if form.invalid("", "slug") %} aria-invalid="true"{% endif %}>
+        <p class="hint" id="p-slug-hint-new">留空按方案名自动生成；只允许小写字母、数字与连字符。</p>
+        {% if form.invalid("", "slug") %}<p class="field-error" id="p-slug-error">{{ form.error("", "slug") }}</p>{% endif %}
+        {% else %}
+        <input id="p-slug" type="text" value="{{ slug }}" disabled aria-describedby="p-slug-hint">
+        <p class="hint" id="p-slug-hint">slug 创建后不可更改。当前订阅地址：<span class="mono">{{ sub_url }}</span></p>
+        {% endif %}
+      </div>
+      <div class="field">
+        <label for="p-on-failure">导出失败时</label>
+        <select id="p-on-failure" name="on_failure" aria-describedby="p-on-failure-hint">
+          <option value="fail"{% if form.selected("", "on_failure", on_failure, "fail") %} selected{% endif %}>严格失败（推荐）</option>
+          <option value="last_good"{% if form.selected("", "on_failure", on_failure, "last_good") %} selected{% endif %}>回退到最近一次成功的配置</option>
+        </select>
+        <p class="hint" id="p-on-failure-hint">
+          无论哪种策略都<strong>不会自动降级到 DIRECT</strong>——那会静默改变你的隐私与路由意图。
+          回退时响应头与预览页都会标出生成时间。
+        </p>
+      </div>
+      <div class="field">
+        <label for="p-token">订阅令牌</label>
+        <input id="p-token" type="text" name="token" value="{{ form.value("", "token", token) }}" placeholder="留空则只用 Basic Auth" aria-describedby="p-token-hint{% if form.invalid("", "token") %} p-token-error{% endif %}"{% if form.invalid("", "token") %} aria-invalid="true"{% endif %}>
+        <button type="button" class="ghost small" data-generate-token="p-token" data-generate-save hidden>生成并保存令牌</button>
+        <p class="hint" id="p-token-hint">
+          <strong>外部客户端不会携带 Basic Auth，必须使用令牌</strong>，否则订阅地址会返回 401。
+          令牌只能读取本方案的订阅，不能访问管理功能；留空时只能在本机已登录的浏览器里使用。
+          「生成并保存令牌」会连同本页其他修改一起保存。
+        </p>
+        {% if form.invalid("", "token") %}<p class="field-error" id="p-token-error">{{ form.error("", "token") }}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>上游</h2>
+      <p class="hint">决定这次导出使用哪些订阅的节点。</p>
+      {% if all_upstreams.is_empty() %}
+      <div class="empty-state">
+        <p class="empty-title">还没有上游</p>
+        <p>先去上游页添加订阅。</p>
+      </div>
+      {% else %}
+      <div data-checkbox-group>
+        <div class="select-list">
+          {% for item in all_upstreams %}
+          <label class="check"><input type="checkbox" name="upstreams" value="{{ item.value }}"{% if item.checked %} checked{% endif %}> <span>{{ item.label }}</span></label>
+          {% endfor %}
+        </div>
+        {% include "partials/check_tools.html" %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>分组</h2>
+      <p class="hint">分组之间存在依赖：子分组必须先被选中，导出时会校验依赖闭包是否完整。</p>
+      {% if all_groups.is_empty() %}
+      <div class="empty-state">
+        <p class="empty-title">还没有分组</p>
+        <p>先去分组页创建分组。</p>
+      </div>
+      {% else %}
+      <div data-checkbox-group>
+        <div class="select-list">
+          {% for item in all_groups %}
+          <label class="check{% if item.auto %} auto-added{% endif %}"><input type="checkbox" name="groups" value="{{ item.value }}" data-group-deps="{{ item.deps_json }}"{% if item.checked %} checked{% endif %}> <span>{{ item.label }}</span></label>
+          {% endfor %}
+        </div>
+        {% include "partials/check_tools.html" %}
+      </div>
+      {% endif %}
+      {% if missing_deps.len() > 0 %}
+      <div class="notice warn" role="status">
+        <span class="notice-title">依赖已自动勾选</span>：以下依赖分组已随你的选择自动加入，并标记为「依赖自动加入」：
+        <strong>{% for d in missing_deps %}{{ d }} {% endfor %}</strong>
+        如取消勾选它们，保存会被拒绝。
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>路由规则</h2>
+      <p class="hint">别忘了选一条 <span class="mono">MATCH</span> 兜底，否则导出会被拦截。</p>
+      {% if all_rules.is_empty() %}
+      <div class="empty-state">
+        <p class="empty-title">还没有规则</p>
+        <p>先去路由规则页添加。</p>
+      </div>
+      {% else %}
+      <div data-checkbox-group>
+        <div class="select-list">
+          {% for item in all_rules %}
+          <label class="check"><input type="checkbox" name="rules" value="{{ item.value }}"{% if item.checked %} checked{% endif %}> <span>{{ item.label }}</span></label>
+          {% endfor %}
+        </div>
+        {% include "partials/check_tools.html" %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button>{% if is_new %}创建方案{% else %}保存修改{% endif %}</button>
+  </div>
+</form>
+
+{% if !is_new %}
+<div class="card">
+  <h2>预览与订阅</h2>
+  <p class="hint">
+    预览不会落盘，会展示每个分组的成员数、每个节点的入组原因、地区判定冲突、被过滤的假节点，
+    以及全部校验错误与警告。当前订阅地址：<span class="mono">{{ sub_url }}</span>
+  </p>
+  {% if token.len() == 0 %}
+  <div class="hint">
+    <span class="field-error">未设订阅令牌</span>：外部客户端拉取会返回 401。请在上方生成令牌并保存。
+  </div>
+  {% endif %}
+  <div class="row-actions">
+    <form class="inline" method="post" action="/profiles/{{ slug }}/preview">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost">渲染预览</button>
+    </form>
+    <button type="button" class="ghost" data-copy="{{ sub_url }}"{% if token.len() == 0 %} data-copy-warning="已复制，但未设订阅令牌，外部客户端会返回 401"{% endif %} hidden>复制链接</button>
+    <a class="btn" href="{{ download_url }}">下载配置</a>
+    <a class="btn ghost" href="{{ sub_url }}" target="_blank" rel="noopener">打开订阅输出</a>
+    <form class="inline" method="post" action="/profiles/{{ slug }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="danger"
+              data-confirm-title="删除方案"
+              data-confirm-ok="删除方案"
+              data-confirm="删除方案「{{ name }}」？订阅地址会立即失效，已导入该地址的客户端将无法再拉取配置。此操作不可撤销。">删除方案</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

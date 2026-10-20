@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}通用设置{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>通用设置</h1>
+  <p class="hint">
+    上方「常用字段 / 高级字段」<strong>会写进导出结果</strong>，是给 Clash 客户端用的配置；
+    「订阅链接」「地区判定与假节点过滤」「GeoIP 数据库」只影响本服务，不会出现在订阅输出中。
+    服务自身的设置（监听地址、密码、刷新间隔）在 <span class="mono">config.toml</span> 里，网页不管。
+  </p>
+</div>
+
+{% include "partials/form_errors.html" %}
+
+<form method="post" action="/general" class="form-narrow">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="revision" value="{{ revision }}">
+
+  <div class="card">
+    <h2>常用字段</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="g-mixed-port">mixed-port</label>
+        <input id="g-mixed-port" type="number" min="1" max="65535" inputmode="numeric" name="mixed-port" value="{{ mixed_port }}" placeholder="7890" aria-describedby="g-common-hint{% if form.invalid("", "mixed-port") %} g-mixed-port-error{% endif %}"{% if form.invalid("", "mixed-port") %} aria-invalid="true"{% endif %}>
+        {% if form.invalid("", "mixed-port") %}<p class="field-error" id="g-mixed-port-error">{{ form.error("", "mixed-port") }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="g-socks-port">socks-port</label>
+        <input id="g-socks-port" type="number" min="1" max="65535" inputmode="numeric" name="socks-port" value="{{ socks_port }}" aria-describedby="g-common-hint{% if form.invalid("", "socks-port") %} g-socks-port-error{% endif %}"{% if form.invalid("", "socks-port") %} aria-invalid="true"{% endif %}>
+        {% if form.invalid("", "socks-port") %}<p class="field-error" id="g-socks-port-error">{{ form.error("", "socks-port") }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="g-port">port</label>
+        <input id="g-port" type="number" min="1" max="65535" inputmode="numeric" name="port" value="{{ port }}" aria-describedby="g-common-hint{% if form.invalid("", "port") %} g-port-error{% endif %}"{% if form.invalid("", "port") %} aria-invalid="true"{% endif %}>
+        {% if form.invalid("", "port") %}<p class="field-error" id="g-port-error">{{ form.error("", "port") }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="g-mode">mode</label>
+        <input id="g-mode" type="text" name="mode" value="{{ mode }}" placeholder="rule" aria-describedby="g-common-hint">
+      </div>
+      <div class="field">
+        <label for="g-log-level">log-level</label>
+        <input id="g-log-level" type="text" name="log-level" value="{{ log_level }}" placeholder="info" aria-describedby="g-common-hint">
+      </div>
+      <div class="field">
+        <label for="g-allow-lan">allow-lan</label>
+        <select id="g-allow-lan" name="allow-lan" aria-describedby="g-common-hint">
+          <option value=""{% if form.selected("", "allow-lan", allow_lan, "") %} selected{% endif %}>（不写入该键）</option>
+          <option value="true"{% if form.selected("", "allow-lan", allow_lan, "true") %} selected{% endif %}>true —— 允许局域网连接</option>
+          <option value="false"{% if form.selected("", "allow-lan", allow_lan, "false") %} selected{% endif %}>false —— 仅本机</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="g-ipv6">ipv6</label>
+        <select id="g-ipv6" name="ipv6" aria-describedby="g-common-hint">
+          <option value=""{% if form.selected("", "ipv6", ipv6, "") %} selected{% endif %}>（不写入该键）</option>
+          <option value="true"{% if form.selected("", "ipv6", ipv6, "true") %} selected{% endif %}>true —— 启用 IPv6</option>
+          <option value="false"{% if form.selected("", "ipv6", ipv6, "false") %} selected{% endif %}>false —— 关闭 IPv6</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="g-common-hint">留空表示不写入该键。这几个键由本表单管理，下面的高级配置里不得重复出现。端口取值 1–65535。</p>
+  </div>
+
+  <div class="card">
+    <h2>高级字段（原文 YAML）</h2>
+    <div class="field">
+      <label for="g-advanced">高级配置</label>
+      <textarea id="g-advanced" name="advanced_yaml" rows="12" class="code"
+                aria-describedby="g-advanced-hint{% if form.invalid("", "advanced_yaml") %} g-advanced-error{% endif %}"{% if form.invalid("", "advanced_yaml") %} aria-invalid="true"{% endif %}>{{ advanced_yaml }}</textarea>
+      <p class="hint" id="g-advanced-hint">
+        <span class="mono">dns</span>、<span class="mono">tun</span>、<span class="mono">rule-providers</span>
+        等低频项在这里维护。上面表单已有的键不得重复出现，重复会直接报错而不是静默覆盖。
+      </p>
+      {% if form.invalid("", "advanced_yaml") %}<p class="field-error" id="g-advanced-error">{{ form.error("", "advanced_yaml") }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>订阅链接</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="g-base-url">BASEURL</label>
+        <input id="g-base-url" type="url" name="base_url" value="{{ base_url }}" placeholder="https://clash.example.com"
+               aria-describedby="g-base-url-hint{% if form.invalid("", "base_url") %} g-base-url-error{% endif %}"{% if form.invalid("", "base_url") %} aria-invalid="true"{% endif %}>
+        <p class="hint" id="g-base-url-hint">
+          用于把订阅链接拼成完整地址（如 <span class="mono">https://clash.example.com/sub/&lt;slug&gt;</span>）。
+          留空时页面只显示相对路径 <span class="mono">/sub/&lt;slug&gt;</span>。
+          通过反向代理对外提供 HTTPS 时，这里必须填外部地址；末尾斜杠会自动去掉。
+          该设置只影响页面展示，不会进入导出结果。
+        </p>
+        {% if form.invalid("", "base_url") %}<p class="field-error" id="g-base-url-error">{{ form.error("", "base_url") }}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>地区判定与假节点过滤</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="g-region-source">地区判定优先级</label>
+        <select id="g-region-source" name="region_source" aria-describedby="g-region-source-hint">
+          <option value="name_first"{% if region_source == "name_first" %} selected{% endif %}>节点名优先（推荐）</option>
+          <option value="ip_first"{% if region_source == "ip_first" %} selected{% endif %}>IP 优先</option>
+        </select>
+        <p class="hint" id="g-region-source-hint">
+          机场大量使用中转 / CDN：<span class="mono">server</span> 是香港入口、实际落地日本时，
+          GeoIP 会<strong>确定地</strong>判成香港且不再回退字符串匹配。节点名是机场自己标的落地地区，通常更可信。
+        </p>
+      </div>
+      <div class="field">
+        <label for="g-filter-keywords">假节点过滤关键词</label>
+        <input id="g-filter-keywords" type="text" name="filter_keywords" value="{{ filter_keywords }}" aria-describedby="g-filter-hint">
+        <p class="hint" id="g-filter-hint">逗号分隔。命中关键词的节点不会进入导出的 proxies，但仍会在上游页展示。</p>
+        <label class="check" for="g-filter-enabled">
+          <input id="g-filter-enabled" type="checkbox" name="filter_enabled"{% if filter_enabled %} checked{% endif %}>
+          <span>启用过滤（信息节点不进入导出的 proxies）
+            <span class="hint">可能误杀名字里恰好含「订阅」的真实节点，预览页会列出被过滤的清单。</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button>保存设置</button>
+  </div>
+</form>
+
+<div class="card form-narrow">
+  <h2>GeoIP 数据库（可选）</h2>
+  <p class="hint">
+    GeoIP 只在节点名没有命中地区别名时，按 <span class="mono">server</span> 的 IP 归属地兜底。
+    库缺失时自动降级为「仅按节点名判定」，不影响导出。注意中转 / CDN 节点：
+    GeoIP 判的是入口 IP，不是实际落地地区。
+  </p>
+
+  {% if geoip.notice.len() > 0 %}
+  <div class="notice {{ geoip.notice_kind }}" role="status">{{ geoip.notice }}</div>
+  {% endif %}
+
+  <p>
+    {% if geoip.installed %}
+    <span class="badge ok">已安装</span>
+    {% else %}
+    <span class="badge failed">未安装</span>
+    {% endif %}
+  </p>
+
+  <dl class="meta">
+    <dt>库文件</dt>
+    <dd class="mono">{{ geoip.db_path }}</dd>
+    <dt>数据库</dt>
+    <dd>{{ geoip.db_type }} · {{ geoip.ip_version }} · 构建于 {{ geoip.build }}</dd>
+    <dt>大小 / 修改时间</dt>
+    <dd>{{ geoip.size }} · {{ geoip.modified }}</dd>
+    <dt>最近一次尝试</dt>
+    <dd>
+      {{ geoip.last_attempt }}
+      {% if geoip.last_error.len() > 0 %}
+      <div class="field-error">{{ geoip.last_error_kind }}：{{ geoip.last_error }}</div>
+      {% endif %}
+    </dd>
+    <dt>最近一次成功</dt>
+    <dd>{{ geoip.last_success }}</dd>
+    <dt>下载来源</dt>
+    <dd class="mono">{{ geoip.source }}</dd>
+    <dt>下次自动检查</dt>
+    <dd>{{ geoip.next_update }}</dd>
+  </dl>
+
+  <p class="hint">
+    内置来源（本月地址）：<span class="mono">{{ geoip.default_url }}</span>。
+    使用 DB-IP Lite Country，免注册；请遵守其许可条款并在部署时注明来源与版本。
+  </p>
+
+  <form method="post" action="/general/geoip/settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="revision" value="{{ revision }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="g-geoip-interval">自动更新间隔（天）</label>
+        <input id="g-geoip-interval" type="number" min="1" max="365" inputmode="numeric" name="geoip_interval_days" value="{{ geoip.interval_days }}"
+               aria-describedby="g-geoip-interval-hint{% if form.invalid("geoip", "geoip_interval_days") %} g-geoip-interval-error{% endif %}"{% if form.invalid("geoip", "geoip_interval_days") %} aria-invalid="true"{% endif %}>
+        <p class="hint" id="g-geoip-interval-hint">
+          取值 1–365 天。启动后先检查一次；源站内容未变时用条件请求（304）跳过下载。
+        </p>
+        {% if form.invalid("geoip", "geoip_interval_days") %}<p class="field-error" id="g-geoip-interval-error">{{ form.error("geoip", "geoip_interval_days") }}</p>{% endif %}
+        <label class="check" for="g-geoip-auto">
+          <input id="g-geoip-auto" type="checkbox" name="geoip_auto_update"{% if geoip.auto_update %} checked{% endif %}>
+          <span>启用定期自动更新
+            <span class="hint">关闭后仍可用下方按钮手动下载；已安装的库继续生效。</span>
+          </span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="g-geoip-url">自定义下载地址</label>
+        <input id="g-geoip-url" type="text" name="geoip_custom_url" value="{{ geoip.custom_url }}"
+               placeholder="留空使用内置 DB-IP Lite Country"
+               aria-describedby="g-geoip-url-hint{% if form.invalid("geoip", "geoip_custom_url") %} g-geoip-url-error{% endif %}"{% if form.invalid("geoip", "geoip_custom_url") %} aria-invalid="true"{% endif %}>
+        <p class="hint" id="g-geoip-url-hint">
+          必须是 http(s) 地址，可指向 <span class="mono">.mmdb</span> 或
+          <span class="mono">.mmdb.gz</span>。自定义地址里的 token 只保存在本机 store.yaml，
+          页面与日志会脱敏。
+        </p>
+        {% if form.invalid("geoip", "geoip_custom_url") %}<p class="field-error" id="g-geoip-url-error">{{ form.error("geoip", "geoip_custom_url") }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="form-actions">
+      <button>保存 GeoIP 设置</button>
+    </div>
+  </form>
+
+  <div class="row-actions">
+    <form class="inline" method="post" action="/general/geoip/download">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost">立即下载 / 更新</button>
+    </form>
+    <span class="hint">下载使用已保存的设置；修改地址或间隔后请先保存。</span>
+  </div>
+</div>
+{% endblock %}

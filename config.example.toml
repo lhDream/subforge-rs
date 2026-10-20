@@ -1,0 +1,28 @@
+# SubForge.rs 配置示例。
+#
+# 便携版首次运行会**自动生成** config.toml（含随机密码）并打印一次；
+# Docker 版默认从 /data/config.toml 读取，也可以通过环境变量覆盖：
+#
+#   SUBFORGE_PASSWORD       管理密码（优先级最高）
+#   SUBFORGE_PASSWORD_FILE  从文件读取管理密码（适合 Docker secret）
+#   SUBFORGE_CONFIG         配置文件路径
+#   SUBFORGE_DATA_DIR       数据目录
+#   SUBFORGE_STATIC_DIR     静态资源目录
+#   SUBFORGE_LISTEN         监听地址，覆盖配置文件
+#
+# 本文件只是示例，不含真实密码；config.toml 不得提交到版本库。
+
+listen = "127.0.0.1:8080"
+password = "changeme"
+
+# 上游定期刷新间隔（humantime 格式：30s / 10m / 6h / 1d）
+refresh_interval = "6h"
+
+# 单个上游拉取超时
+fetch_timeout = "30s"
+
+# 拉取并发上限
+fetch_concurrency = 4
+
+# 业务数据与缓存目录（相对路径相对本配置文件所在目录解析）
+data_dir = "data"

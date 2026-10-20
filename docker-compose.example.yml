@@ -1,0 +1,30 @@
+# SubForge.rs Docker Compose 示例
+#
+# 用法：
+#   1. 复制为 docker-compose.yml
+#   2. 在 .env 里设置 SUBFORGE_PASSWORD，或删掉 environment 里的密码项走首次自动生成
+#   3. docker compose up -d
+#   4. 如果走自动生成：docker compose logs subforge-rs 查看一次性密码
+#
+# 注意：
+#   - 只把端口绑定到 127.0.0.1，公网访问请在前面加 HTTPS 反向代理。
+#   - /data 含上游 token，不要提交到版本库，记得单独备份。
+
+services:
+  subforge-rs:
+    image: subforge-rs:0.1.0
+    # 需要本地构建时取消下一行注释：
+    # build: .
+    container_name: subforge-rs
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - subforge-data:/data
+    environment:
+      # 推荐从 .env 读取；如果要首次自动生成密码，删除这一项即可。
+      SUBFORGE_PASSWORD: ${SUBFORGE_PASSWORD:?请在 .env 中设置 SUBFORGE_PASSWORD，或删除本项改用自动生成}
+      RUST_LOG: info
+
+volumes:
+  subforge-data:

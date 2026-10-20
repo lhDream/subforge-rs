@@ -1,0 +1,1171 @@
+/* ==========================================================================
+ * style.css — 应用样式入口
+ *
+ * 全部取值来自 static/ui-tokens.css（设计变量唯一来源，见 docs/ui-design-spec.md）。
+ * 业务规则只引用语义化变量，不写字面色值。
+ *
+ * 密度约定（规范 §4.2）：默认控件高度 44px；高密度桌面工具区统一使用
+ * .dense 容器切到 36px 紧凑规格，窄屏（<768px）自动回到 44px 以保证触屏可用。
+ * ========================================================================== */
+
+@import "ui-tokens.css";
+
+/* ---------------------------------------------------------------- 基础 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Author 样式里的 display 会覆盖浏览器对 hidden 属性的默认处理，
+   导致「无 JS 时应隐藏」的控件仍然可见（如复制按钮）。这里统一兜底。 */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ui-bg-page);
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font-sans);
+  font-size: var(--ui-font-size-base);
+  line-height: var(--ui-line-height-body);
+}
+
+/* 键盘焦点必须清晰可见：2px 外描边 + 2px 间距（规范 §7.1） */
+:focus-visible {
+  outline: var(--ui-focus-ring-width) solid var(--ui-focus-ring-color);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
+/* 深色背景上的焦点环改用白色，保证 3:1 可见度 */
+.on-brand :focus-visible {
+  outline-color: var(--ui-focus-ring-color-inverse);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--ui-text-primary);
+}
+
+h1 {
+  font-size: var(--ui-font-size-page-title);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-tight);
+}
+
+h2 {
+  font-size: var(--ui-font-size-section);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-heading);
+  margin: var(--ui-space-8) 0 var(--ui-space-3);
+}
+
+/* 卡片标题：16px（规范 §3.1「卡片标题」）。
+ *
+ * 卡片里的分区标题语义上是 h2（页面之下的一级分区，保证标题层级连续），
+ * 但视觉上按「卡片标题」规格呈现，因此与 h3 共用同一条规则。
+ * 页面级分区标题（不在卡片里）仍用 h2 的 20px。 */
+h3,
+.card > h2 {
+  font-size: var(--ui-font-size-card-title);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-body);
+  margin: 0 0 var(--ui-space-4);
+}
+
+p {
+  margin: 0 0 var(--ui-space-3);
+}
+
+/* 正文链接默认带下划线，不靠颜色单独区分（规范 §2.2） */
+a {
+  color: var(--ui-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--ui-text-link-hover);
+}
+
+code,
+pre {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-font-size-caption);
+}
+
+pre {
+  background: var(--ui-bg-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  padding: var(--ui-space-4);
+  overflow: auto;
+  max-height: var(--ui-code-block-max-height);
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+ul.tight {
+  margin: var(--ui-space-1) 0;
+  padding-left: var(--ui-space-5);
+}
+
+ul.tight li {
+  margin: var(--ui-space-1) 0;
+}
+
+/* ---------------------------------------------------------------- 工具类 */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hint {
+  color: var(--ui-text-tertiary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-body);
+}
+
+.muted {
+  color: var(--ui-text-secondary);
+}
+
+.mono {
+  font-family: var(--ui-font-mono);
+  word-break: break-word;
+}
+
+/* 数值列：右对齐 + 等宽数字，便于按位比较（规范 §6 表格） */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 跳到主要内容：仅键盘聚焦时出现 */
+.skip-link {
+  position: absolute;
+  left: var(--ui-space-4);
+  top: calc(-1 * var(--ui-space-16));
+  z-index: var(--ui-z-toast);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-link);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  text-decoration: none;
+  transition: top var(--ui-duration-overlay) var(--ui-ease-standard);
+}
+
+.skip-link:focus {
+  top: var(--ui-space-2);
+}
+
+/* ---------------------------------------------------------------- 骨架 */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2) var(--ui-space-6);
+  padding: var(--ui-space-2) var(--ui-space-8);
+  background: var(--ui-bg-surface);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.brand {
+  font-size: var(--ui-font-size-card-title);
+  font-weight: var(--ui-font-weight-semibold);
+  color: var(--ui-text-primary);
+  text-decoration: none;
+  padding: var(--ui-space-2) 0;
+}
+
+.nav-drawer {
+  flex: 1 1 auto;
+}
+
+.nav-drawer > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-2) var(--ui-space-4);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-medium);
+  cursor: pointer;
+  list-style: none;
+}
+
+.nav-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-drawer > summary::after {
+  content: "▾";
+  color: var(--ui-text-secondary);
+}
+
+.nav-drawer[open] > summary::after {
+  content: "▴";
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-1);
+}
+
+.app-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-secondary);
+  text-decoration: none;
+  font-weight: var(--ui-font-weight-regular);
+}
+
+.app-nav a:hover {
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-primary);
+}
+
+/* 选中态同时使用颜色、背景、字重与标识线，不只改颜色（规范 §5.1） */
+.app-nav a[aria-current="page"] {
+  background: var(--ui-bg-selected);
+  color: var(--ui-brand);
+  font-weight: var(--ui-font-weight-semibold);
+  box-shadow: inset 0 -2px 0 var(--ui-brand);
+}
+
+.page {
+  max-width: var(--ui-content-max-width);
+  margin: 0 auto;
+  padding: var(--ui-space-8);
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-space-3) var(--ui-space-6);
+  margin-bottom: var(--ui-space-6);
+}
+
+.page-head .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.app-footer {
+  max-width: var(--ui-content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--ui-space-8) var(--ui-space-12);
+  color: var(--ui-text-tertiary);
+  font-size: var(--ui-font-size-caption);
+}
+
+/* ---------------------------------------------------------------- 按钮 */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-2);
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-2) var(--ui-space-5);
+  border: 1px solid var(--ui-brand);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-brand);
+  color: var(--ui-text-on-brand);
+  font-family: inherit;
+  font-size: var(--ui-font-size-base);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: var(--ui-line-height-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--ui-duration-button) var(--ui-ease-standard),
+    border-color var(--ui-duration-button) var(--ui-ease-standard),
+    color var(--ui-duration-button) var(--ui-ease-standard);
+}
+
+button:hover,
+.btn:hover {
+  background: var(--ui-brand-hover);
+  border-color: var(--ui-brand-hover);
+  color: var(--ui-text-on-brand);
+}
+
+button:active,
+.btn:active {
+  background: var(--ui-brand-active);
+  border-color: var(--ui-brand-active);
+}
+
+/* 次要操作：描边按钮 */
+button.ghost,
+.btn.ghost {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-border-control);
+  color: var(--ui-text-primary);
+}
+
+button.ghost:hover,
+.btn.ghost:hover {
+  background: var(--ui-bg-selected);
+  border-color: var(--ui-brand);
+  color: var(--ui-brand);
+}
+
+button.ghost:active,
+.btn.ghost:active {
+  background: var(--ui-bg-selected);
+}
+
+/* 危险操作：独立配色，与普通操作可区分 */
+button.danger,
+.btn.danger {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-text-danger);
+  color: var(--ui-text-danger);
+}
+
+button.danger:hover,
+.btn.danger:hover {
+  background: var(--ui-bg-danger);
+  border-color: var(--ui-text-danger);
+  color: var(--ui-text-danger);
+}
+
+button.small,
+.btn.small {
+  min-height: var(--ui-control-height-compact);
+  padding: var(--ui-space-1) var(--ui-space-3);
+  font-size: var(--ui-font-size-caption);
+}
+
+button:disabled,
+.btn[aria-disabled="true"] {
+  background: var(--ui-bg-disabled);
+  border-color: var(--ui-border-disabled);
+  color: var(--ui-text-disabled);
+  cursor: not-allowed;
+}
+
+/* 提交中：保留文字与宽度，只表示「已响应」（规范 §7.1） */
+button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+/* 标题下方、主内容上方的筛选 / 工具区 */
+.toolbar {
+  margin-bottom: var(--ui-space-6);
+}
+
+/* ---------------------------------------------------------------- 表单 */
+
+form.inline {
+  display: inline;
+}
+
+/* 输入框 + 旁边的次要操作（如「选择节点」） */
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+.input-with-action > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+fieldset > legend {
+  padding: 0;
+  margin-bottom: var(--ui-space-2);
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.field > label,
+.field > .label {
+  display: block;
+  margin-bottom: var(--ui-space-2);
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.field > .hint {
+  margin: var(--ui-space-1) 0 0;
+}
+
+/* 字段级错误：文字说明 + 程序关联，不只靠红色边框（规范 §7.1） */
+.field-error {
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-text-danger);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: var(--ui-line-height-body);
+}
+
+[aria-invalid="true"] {
+  border-color: var(--ui-text-danger);
+  background: var(--ui-bg-danger);
+}
+
+.req {
+  color: var(--ui-text-danger);
+  font-weight: var(--ui-font-weight-semibold);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="url"],
+input[type="search"],
+select,
+textarea {
+  width: 100%;
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font-sans);
+  font-size: var(--ui-font-size-base);
+  line-height: var(--ui-line-height-body);
+  transition:
+    border-color var(--ui-duration-button) var(--ui-ease-standard),
+    background-color var(--ui-duration-button) var(--ui-ease-standard);
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--ui-text-secondary);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--ui-bg-disabled);
+  border-color: var(--ui-border-disabled);
+  color: var(--ui-text-disabled);
+  cursor: not-allowed;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ui-text-placeholder);
+  opacity: 1;
+}
+
+textarea {
+  min-height: var(--ui-textarea-min-height);
+  resize: vertical;
+}
+
+/* 代码 / 规则 / YAML 用等宽字体 */
+textarea.code,
+input.code {
+  font-family: var(--ui-font-mono);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-reading);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: var(--ui-checkbox-size);
+  height: var(--ui-checkbox-size);
+  min-height: 0;
+  margin: 0;
+  flex: none;
+  accent-color: var(--ui-brand);
+}
+
+/* 复选框 / 单选项：整行可点，满足 44px 触控目标 */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-space-2);
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-1) 0;
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-regular);
+  cursor: pointer;
+}
+
+.check > input {
+  margin-top: var(--ui-checkbox-optical-offset);
+}
+
+.check .hint {
+  display: block;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--ui-grid-min-column), 1fr));
+  gap: var(--ui-space-5);
+}
+
+.form-grid + .form-grid {
+  margin-top: var(--ui-space-5);
+}
+
+/* 字段网格之后的整体说明（如「标 * 的为必填」）与网格拉开距离 */
+.form-grid + .hint,
+.form-grid + fieldset,
+fieldset + .hint,
+.form-actions + .hint {
+  margin-top: var(--ui-space-5);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-6) 0 0;
+}
+
+.form-narrow {
+  max-width: var(--ui-form-max-width);
+}
+
+/* 多选列表（方案勾选） */
+.select-list {
+  max-height: var(--ui-select-list-max-height);
+  overflow: auto;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-control);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  background: var(--ui-bg-surface);
+}
+
+.select-list .check {
+  min-height: var(--ui-control-height-compact);
+  padding: var(--ui-space-1);
+  border-radius: var(--ui-radius-control);
+}
+
+.select-list .check:hover {
+  background: var(--ui-bg-subtle);
+}
+
+.select-list .check:has(input:checked) {
+  background: var(--ui-bg-selected);
+}
+
+/* 方案页：因依赖被自动勾选的项 */
+.select-list .check.auto-added {
+  box-shadow: inset 3px 0 0 var(--ui-text-warning);
+}
+
+.select-list .check.auto-added > span::after {
+  content: "（依赖自动加入）";
+  color: var(--ui-text-warning);
+  font-size: var(--ui-font-size-caption);
+}
+
+/* 全选 / 反选：按钮由 JS 解除 hidden 后出现，无 JS 时整行不可见 */
+.check-tools {
+  display: flex;
+  gap: var(--ui-space-2);
+  margin-top: var(--ui-space-2);
+}
+
+/* ---------------------------------------------------------------- 卡片 */
+
+.card {
+  background: var(--ui-bg-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  padding: var(--ui-space-6);
+  margin-bottom: var(--ui-space-6);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--ui-grid-min-column), 1fr));
+  gap: var(--ui-space-5);
+}
+
+/* 实体列表：一个实体一张卡，卡内用 details 收纳编辑表单 */
+.entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-4);
+}
+
+.entity > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.entity > summary::-webkit-details-marker {
+  display: none;
+}
+
+.entity > summary::after {
+  content: "编辑";
+  margin-left: auto;
+  align-self: center;
+  padding: var(--ui-space-1) var(--ui-space-3);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-primary);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.entity[open] > summary::after {
+  content: "收起";
+}
+
+.entity[open] > summary {
+  margin-bottom: var(--ui-space-5);
+  padding-bottom: var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.entity-name {
+  font-size: var(--ui-font-size-card-title);
+  font-weight: var(--ui-font-weight-semibold);
+  line-height: var(--ui-line-height-body);
+}
+
+/* 拖动排序手柄：默认 hidden，由脚本显示；无 JS 时用卡片内的上移/下移 */
+.drag-handle {
+  cursor: grab;
+  color: var(--ui-text-secondary);
+  letter-spacing: -0.15em;
+  user-select: none;
+  padding: 0 var(--ui-space-1);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.entity.is-dragging {
+  opacity: 0.55;
+}
+
+.entity-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  margin-bottom: var(--ui-space-4);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ui-space-1) var(--ui-space-4);
+  margin: 0 0 var(--ui-space-4);
+  font-size: var(--ui-font-size-caption);
+}
+
+.meta dt {
+  color: var(--ui-text-secondary);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.meta dd {
+  margin: 0;
+  color: var(--ui-text-primary);
+}
+
+/* ---------------------------------------------------------------- 表格 */
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--ui-bg-surface);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  margin-bottom: var(--ui-space-6);
+}
+
+.table-wrap > table {
+  min-width: 100%;
+}
+
+/* 列多的二维内容在独立区域内滚动，操作列不会消失（规范 §5.2） */
+.table-wrap.wide > table {
+  min-width: var(--ui-table-min-width);
+}
+
+/* 标识列给足最小宽度，否则窄屏下会被压到逐字换行 */
+.table-wrap.wide th:first-child,
+.table-wrap.wide td:first-child {
+  min-width: var(--ui-table-key-column);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+caption {
+  text-align: left;
+  padding: var(--ui-space-3) var(--ui-space-4);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border-subtle);
+  vertical-align: top;
+}
+
+th {
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-semibold);
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+td.cell-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* 操作列内的按钮排成一行，避免把整行撑高到几百像素 */
+td.cell-actions .row-actions {
+  flex-wrap: nowrap;
+}
+
+/* 表格内的内联控件统一走紧凑规格 */
+.dense input[type="text"],
+.dense input[type="number"],
+.dense select {
+  min-height: var(--ui-control-height-compact);
+  padding: var(--ui-space-1) var(--ui-space-2);
+}
+
+.dense button {
+  min-height: var(--ui-control-height-compact);
+  padding: var(--ui-space-1) var(--ui-space-3);
+  font-size: var(--ui-font-size-caption);
+}
+
+.dense .check {
+  min-height: var(--ui-control-height-compact);
+}
+
+/* ---------------------------------------------------------------- 提示与徽标 */
+
+/* 状态一律「颜色 + 文字」，不靠颜色单独区分（规范 §2.2） */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: var(--ui-line-height-body);
+  white-space: nowrap;
+}
+
+.badge.ok {
+  background: var(--ui-bg-success);
+  border-color: var(--ui-border-success);
+  color: var(--ui-text-success);
+}
+
+.badge.stale,
+.badge.empty {
+  background: var(--ui-bg-warning);
+  border-color: var(--ui-border-warning);
+  color: var(--ui-text-warning);
+}
+
+.badge.failed {
+  background: var(--ui-bg-danger);
+  border-color: var(--ui-border-danger);
+  color: var(--ui-text-danger);
+}
+
+.notice {
+  border: 1px solid var(--ui-border-info);
+  border-left-width: 4px;
+  border-radius: var(--ui-radius-card);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  margin-bottom: var(--ui-space-4);
+  background: var(--ui-bg-info);
+  color: var(--ui-text-info);
+}
+
+.notice > :last-child {
+  margin-bottom: 0;
+}
+
+.notice.ok {
+  background: var(--ui-bg-success);
+  border-color: var(--ui-border-success);
+  color: var(--ui-text-success);
+}
+
+.notice.warn {
+  background: var(--ui-bg-warning);
+  border-color: var(--ui-border-warning);
+  color: var(--ui-text-warning);
+}
+
+.notice.error {
+  background: var(--ui-bg-danger);
+  border-color: var(--ui-border-danger);
+  color: var(--ui-text-danger);
+}
+
+.notice.info {
+  background: var(--ui-bg-info);
+  border-color: var(--ui-border-info);
+  color: var(--ui-text-info);
+}
+
+.notice-title {
+  font-weight: var(--ui-font-weight-semibold);
+}
+
+.notice a {
+  color: inherit;
+}
+
+/* 操作结果提示：短暂出现，明确告知成功/失败（无 JS 时不显示）。 */
+.status-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--ui-space-8);
+  transform: translateX(-50%);
+  z-index: var(--ui-z-toast);
+  max-width: min(90vw, 32rem);
+  padding: var(--ui-space-3) var(--ui-space-5);
+  border: 1px solid var(--ui-border-success);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-bg-success);
+  color: var(--ui-text-success);
+  box-shadow: var(--ui-shadow-menu);
+  font-size: var(--ui-font-size-base);
+  font-weight: var(--ui-font-weight-medium);
+  text-align: center;
+}
+
+.status-toast.warn {
+  border-color: var(--ui-border-warning);
+  background: var(--ui-bg-warning);
+  color: var(--ui-text-warning);
+}
+
+.status-toast.error {
+  border-color: var(--ui-border-danger);
+  background: var(--ui-bg-danger);
+  color: var(--ui-text-danger);
+}
+
+/* ---------------------------------------------------------------- 空状态 */
+
+/* 空数据、无结果、失败、无权限各有各的文案，不复用同一个「暂无数据」 */
+.empty-state {
+  border: 1px dashed var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-bg-surface);
+  padding: var(--ui-space-8) var(--ui-space-6);
+  margin-bottom: var(--ui-space-6);
+  text-align: center;
+  color: var(--ui-text-secondary);
+}
+
+.empty-state > :last-child {
+  margin-bottom: 0;
+}
+
+.empty-state .empty-title {
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-semibold);
+  margin-bottom: var(--ui-space-2);
+}
+
+.empty-state .row-actions {
+  justify-content: center;
+  margin-top: var(--ui-space-4);
+}
+
+/* 实体卡在列表里由 gap 控制间距，不再叠加卡片的 margin */
+.entity-list .card {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------- 弹窗 */
+
+dialog {
+  width: min(var(--ui-dialog-width), calc(100vw - var(--ui-space-8)));
+  padding: var(--ui-space-6);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-dialog);
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+  box-shadow: var(--ui-shadow-dialog);
+}
+
+dialog::backdrop {
+  background: var(--ui-backdrop);
+}
+
+dialog h2 {
+  margin-top: 0;
+}
+
+dialog .row-actions {
+  justify-content: flex-end;
+  margin-top: var(--ui-space-6);
+}
+
+/* 表单弹窗：标题 / 主体 / 底部操作三段，主体独立滚动，底部操作不被长表单推出视野。
+ *
+ * 「页内表单」形态见下面的 dialog.modal[open]:not([data-modal])：
+ * 服务端在没有 JS（或浏览器不支持 showModal）时把同一个 <dialog> 带 open
+ * 渲染出来，这里把它还原成页内卡片，表单照常可填可提交。
+ * 用 data-modal 标记而不是 :modal 伪类，是为了让不认识 :modal 的浏览器
+ * 只丢弃这一条规则，而不是把整组选择器判为无效。 */
+dialog.modal {
+  width: min(var(--ui-dialog-width-wide), calc(100vw - var(--ui-space-8)));
+  max-height: var(--ui-dialog-max-height);
+  max-height: var(--ui-dialog-max-height-dvh);
+  padding: 0;
+  overflow: hidden;
+}
+
+dialog.modal > form {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+
+.modal-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-6) var(--ui-space-6) 0;
+}
+
+.modal-head > h2 {
+  margin: 0;
+}
+
+/* min-height:0 让主体能真正收缩，否则底部操作会被内容顶出弹窗 */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--ui-space-4) var(--ui-space-6);
+}
+
+.modal-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-4) var(--ui-space-6) var(--ui-space-6);
+  border-top: 1px solid var(--ui-border-subtle);
+  background: var(--ui-bg-surface);
+}
+
+/* 页内表单形态：无 JS、?new=1 深链、或校验失败回填时的样子。
+ * 观感与原来的常驻卡片一致，因此没有脚本也看不出差别。 */
+dialog.modal[open]:not([data-modal]) {
+  position: static;
+  width: auto;
+  max-width: var(--ui-form-max-width);
+  max-height: none;
+  margin: 0 0 var(--ui-space-6);
+  padding: var(--ui-space-6);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  box-shadow: none;
+  overflow: visible;
+}
+
+dialog.modal[open]:not([data-modal]) .modal-head {
+  margin-bottom: var(--ui-space-4);
+  padding: 0;
+}
+
+dialog.modal[open]:not([data-modal]) .modal-head > h2 {
+  font-size: var(--ui-font-size-card-title);
+}
+
+dialog.modal[open]:not([data-modal]) .modal-body {
+  overflow: visible;
+  padding: 0;
+}
+
+dialog.modal[open]:not([data-modal]) .modal-foot {
+  margin-top: var(--ui-space-6);
+  padding: 0;
+  border-top: 0;
+  background: none;
+}
+
+/* 页内形态没有「打开 / 关闭」这回事，隐藏只对弹窗成立的关闭入口，
+ * 避免留下点不动的死控件（规范 §6 按钮）。 */
+dialog.modal[open]:not([data-modal]) [data-dialog-close] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- 响应式 */
+
+/* 平板：页面留白 24px */
+@media (max-width: 1023px) {
+  .app-header,
+  .page,
+  .app-footer {
+    padding-left: var(--ui-space-6);
+    padding-right: var(--ui-space-6);
+  }
+}
+
+/* 手机：单列、抽屉导航、控件回到 44px */
+@media (max-width: 767px) {
+  .app-header,
+  .page,
+  .app-footer {
+    padding-left: var(--ui-space-4);
+    padding-right: var(--ui-space-4);
+  }
+
+  .card,
+  .empty-state {
+    padding: var(--ui-space-4);
+  }
+
+  .page {
+    padding-top: var(--ui-space-4);
+  }
+
+  .nav-drawer[open] > .app-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: var(--ui-space-2);
+  }
+
+  .grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 窄屏下紧凑密度会低于触控目标，统一回到 44px */
+  .dense input[type="text"],
+  .dense input[type="number"],
+  .dense select,
+  .dense button,
+  .dense .check,
+  button.small,
+  .btn.small {
+    min-height: var(--ui-control-height);
+    font-size: var(--ui-font-size-base);
+  }
+}
+
+/* 桌面：导航常驻展开，抽屉开关隐藏。
+ *
+ * 导航用 <details> 承载，因此桌面端要覆盖浏览器对「关闭的 details 隐藏内容」的
+ * 内置样式。两种实现都要覆盖：旧式 UA 规则用作者样式的 display 覆盖即可；
+ * Chrome 131+ 改用 ::details-content 的 content-visibility，需要显式放开。
+ * 不支持该伪元素的浏览器会丢弃那一条声明，不影响前一条。 */
+@media (min-width: 768px) {
+  .nav-drawer > summary {
+    display: none;
+  }
+
+  .nav-drawer::details-content {
+    content-visibility: visible;
+  }
+
+  .nav-drawer > .app-nav {
+    display: flex;
+  }
+}
+
+/* ---------------------------------------------------------------- 动效偏好 */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

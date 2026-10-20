@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}手动节点{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>手动节点</h1>
+  <div class="row-actions">
+    <a class="btn" href="/nodes?new=1" data-dialog-open="node-create">添加手动节点</a>
+  </div>
+  <p class="hint">
+    粘贴分享链接（<span class="mono">ss://</span> / <span class="mono">vmess://</span> /
+    <span class="mono">vless://</span> / <span class="mono">trojan://</span> /
+    <span class="mono">hysteria2://</span> / <span class="mono">tuic://</span> /
+    <span class="mono">socks5://</span>），每行一条。
+    手动节点不参与订阅刷新，导出时与上游节点合并；同名时手动节点优先。
+  </p>
+</div>
+
+<div class="notice info" role="status">
+  <span class="notice-title">安全提示</span>：分享链接里可能含密码或 UUID，页面只展示协议与服务器地址，不回显完整链接；日志也不会记录链接内容。
+</div>
+
+{% if !form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+
+<dialog id="node-create" class="modal" aria-labelledby="node-create-title"{% if create_open %} open{% endif %}>
+  <form method="post" action="/nodes">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="node-create-title">添加手动节点</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="field">
+        <label for="new-node-links">分享链接 <span class="req" aria-hidden="true">*</span></label>
+        <textarea id="new-node-links" name="links" rows="8" required data-autofocus placeholder="ss://...#香港01&#10;vmess://..." aria-describedby="new-node-links-hint{% if form.invalid("", "links") %} new-node-links-error{% endif %}"{% if form.invalid("", "links") %} aria-invalid="true"{% endif %}>{{ form.value("", "links", "") }}</textarea>
+        <p class="hint" id="new-node-links-hint">每行一条；空行与 <span class="mono">#</span> 开头的行会被忽略。不支持的协议或格式错误会整批拒绝并指出行号。</p>
+        {% if form.invalid("", "links") %}<p class="field-error" id="new-node-links-error">{{ form.error("", "links") }}</p>{% endif %}
+      </div>
+      <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>添加</button>
+    </div>
+  </form>
+</dialog>
+
+<h2>已有手动节点</h2>
+{% if rows.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有手动节点</p>
+  <p>点「添加手动节点」粘贴几条分享链接。它们会出现在导出配置里，并参与分组匹配与地区判定。</p>
+</div>
+{% else %}
+<div class="table-wrap dense">
+<table>
+  <caption>共 {{ rows.len() }} 个手动节点</caption>
+  <thead>
+  <tr>
+    <th scope="col">节点名</th>
+    <th scope="col">协议</th>
+    <th scope="col">服务器</th>
+    <th scope="col">被分组引用</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for n in rows %}
+  <tr>
+    <td>
+      {% if n.parse_error.is_empty() %}
+      <span class="mono">{{ n.name }}</span>
+      {% else %}
+      <span class="badge">解析失败</span>
+      <p class="field-error">{{ n.parse_error }}</p>
+      {% endif %}
+    </td>
+    <td>{% if n.kind.is_empty() %}—{% else %}<span class="mono">{{ n.kind }}</span>{% endif %}</td>
+    <td>{% if n.server.is_empty() %}—{% else %}<span class="mono">{{ n.server }}{% if !n.port.is_empty() %}:{{ n.port }}{% endif %}</span>{% endif %}</td>
+    <td>{% if n.used_by.is_empty() %}—{% else %}{{ n.used_by }}{% endif %}</td>
+    <td class="cell-actions">
+      <form class="inline" method="post" action="/nodes/delete">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="id" value="{{ n.id }}">
+        <button class="small danger"
+                data-confirm-title="删除手动节点"
+                data-confirm-ok="删除"
+                data-confirm="删除手动节点「{{ n.name }}」？{% if !n.used_by.is_empty() %}它仍被分组 {{ n.used_by }} 引用，需先从分组里移除。{% endif %}">删除</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

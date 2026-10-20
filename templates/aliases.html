@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}地区别名{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>地区别名表</h1>
+  <div class="row-actions">
+    <a class="btn" href="/aliases?new=1" data-dialog-open="alias-create">新增地区</a>
+  </div>
+  <p class="hint">
+    不同机场对同一地区的命名差异极大（<span class="mono">香港</span> / <span class="mono">HK</span> /
+    <span class="mono">Hong Kong</span> / <span class="mono">🇭🇰</span>）。
+    别名表让分组只需写 <span class="mono">regions: [香港]</span>，变体集中在这里维护。
+  </p>
+</div>
+
+<div class="notice info" role="status">
+  <span class="notice-title">匹配规则</span>：含中文或 emoji 的别名按子串匹配；
+  纯 ASCII 且长度 ≤ 3 的别名要求前后不是 ASCII 字母，所以
+  <span class="mono">US</span> 不会命中 <span class="mono">Russia</span>、<span class="mono">Australia</span>，
+  但会命中 <span class="mono">US01</span>、<span class="mono">US-01</span>。此规则写死，不开放配置。
+</div>
+
+{# 新增表单的错误显示在弹窗内部，这里只渲染行内编辑表单的错误 #}
+{% if !form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+
+<dialog id="alias-create" class="modal" aria-labelledby="alias-create-title"{% if create_open %} open{% endif %}>
+  <form method="post" action="/aliases">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="alias-create-title">新增地区</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="new-al-region">地区名 <span class="req" aria-hidden="true">*</span></label>
+          <input id="new-al-region" type="text" name="region" required data-autofocus placeholder="香港" value="{{ form.value("", "region", "") }}" aria-describedby="new-al-region-hint{% if form.invalid("", "region") %} new-al-region-error{% endif %}"{% if form.invalid("", "region") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-al-region-hint">分组里 <span class="mono">regions</span> 写的就是这个名称。</p>
+          {% if form.invalid("", "region") %}<p class="field-error" id="new-al-region-error">{{ form.error("", "region") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-al-aliases">别名 <span class="req" aria-hidden="true">*</span></label>
+          <input id="new-al-aliases" type="text" name="aliases" required placeholder="HK, Hong Kong, 🇭🇰, 港" value="{{ form.value("", "aliases", "") }}" aria-describedby="new-al-aliases-hint{% if form.invalid("", "aliases") %} new-al-aliases-error{% endif %}"{% if form.invalid("", "aliases") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-al-aliases-hint">逗号分隔。同一别名不得挂在两个地区下，否则保存会被拒绝。</p>
+          {% if form.invalid("", "aliases") %}<p class="field-error" id="new-al-aliases-error">{{ form.error("", "aliases") }}</p>{% endif %}
+        </div>
+      </div>
+      <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>添加地区</button>
+    </div>
+  </form>
+</dialog>
+
+<h2>已有地区</h2>
+{% if rows.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">别名表是空的</p>
+  <p>没有别名时，只有与地区名完全一致的节点名才能被 <span class="mono">regions</span> 匹配到。点「新增地区」添加第一条。</p>
+</div>
+{% else %}
+<div class="table-wrap dense">
+<table>
+  <caption>共 {{ rows.len() }} 个地区 · 修改后点该行的「保存修改」</caption>
+  <thead>
+  <tr>
+    <th scope="col" id="al-col-region">地区</th>
+    <th scope="col" id="al-col-aliases">别名</th>
+    <th scope="col" class="num">别名数量</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for a in rows %}
+  <tr>
+    <td>
+      <form id="alf-{{ a.index_id }}" method="post" action="/aliases"></form>
+      <input form="alf-{{ a.index_id }}" type="hidden" name="csrf" value="{{ csrf }}">
+      <input form="alf-{{ a.index_id }}" type="hidden" name="original_region" value="{{ a.region }}">
+      <input form="alf-{{ a.index_id }}" type="text" name="region" value="{{ form.value(a.region, "region", a.region) }}" aria-labelledby="al-col-region"{% if form.invalid(a.region, "region") %} aria-invalid="true" aria-describedby="alf-region-{{ a.index_id }}-error"{% endif %}>
+      {% if form.invalid(a.region, "region") %}<p class="field-error" id="alf-region-{{ a.index_id }}-error">{{ form.error(a.region, "region") }}</p>{% endif %}
+    </td>
+    <td>
+      <input form="alf-{{ a.index_id }}" type="text" name="aliases" value="{{ form.value(a.region, "aliases", a.aliases) }}" aria-labelledby="al-col-aliases"{% if form.invalid(a.region, "aliases") %} aria-invalid="true" aria-describedby="alf-aliases-{{ a.index_id }}-error"{% endif %}>
+      {% if form.invalid(a.region, "aliases") %}<p class="field-error" id="alf-aliases-{{ a.index_id }}-error">{{ form.error(a.region, "aliases") }}</p>{% endif %}
+    </td>
+    <td class="num">{{ a.count }}</td>
+    <td class="cell-actions">
+      <div class="row-actions">
+        <button form="alf-{{ a.index_id }}" class="small">保存修改</button>
+        <form class="inline" method="post" action="/aliases/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="region" value="{{ a.region }}">
+          <button class="small danger"
+                  data-confirm-title="删除地区"
+                  data-confirm-ok="删除地区"
+                  data-confirm="删除地区「{{ a.region }}」及其 {{ a.count }} 个别名？引用该地区的分组会失去这部分匹配能力，节点可能落入兜底分组。">删除地区</button>
+        </form>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

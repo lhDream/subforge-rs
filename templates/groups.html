@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block title %}分组{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>分组</h1>
+  <div class="row-actions">
+    {# 触发入口是普通链接：没有 JS 时浏览器导航到 ?new=1，服务端把表单渲染在页内；
+       有脚本时 static/app.js 拦截点击，改为打开模态弹窗。 #}
+    <a class="btn" href="/groups?new=1" data-dialog-open="group-create">新建分组</a>
+    <form method="post" action="/groups/preset-catch-all">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="ghost" aria-describedby="preset-catch-all-hint">添加「漏网之鱼」兜底分组</button>
+    </form>
+  </div>
+  <p class="hint">
+    分组成员由「匹配配方」自动算出：<strong>手动子分组 → 手动节点 → 自动匹配</strong>，整体去重。
+    分组名即 Clash 的 proxy-group 名，重命名会级联改写所有引用处。
+  </p>
+  <p class="hint" id="preset-catch-all-hint">
+    「漏网之鱼」是预设的兜底分组：收录<strong>未被其他分组按匹配条件选中</strong>的节点。
+    已存在同名分组时只补上 <span class="mono">catch_all</span> 标志，不覆盖你已有的配置。
+  </p>
+</div>
+
+{# 新建表单的错误显示在弹窗内部，这里只渲染页面上其他表单的错误 #}
+{% if !form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+
+<div class="notice info" role="status">
+  <span class="notice-title">提示</span>：分组不存储节点列表，只存储配方。机场改节点命名时，
+  调整配方比逐个改节点名更可靠。
+</div>
+
+{# 新建分组：参数表单装在 <dialog> 里。
+   create_open 为真时带 open 渲染 —— 无 JS、或浏览器不支持 showModal 时，
+   它会按 style.css 的 dialog.modal[open]:not([data-modal]) 退化成页内卡片，
+   表单照常可填可提交；也不会出现点不动的死控件。 #}
+<dialog id="group-create" class="modal" aria-labelledby="group-create-title"{% if create_open %} open{% endif %}>
+  <form method="post" action="/groups">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="group-create-title">新建分组</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="new-g-name">分组名 <span class="req" aria-hidden="true">*</span></label>
+          <input id="new-g-name" type="text" name="name" required data-autofocus placeholder="美国节点" value="{{ form.value("", "name", "") }}" aria-describedby="new-g-name-hint{% if form.invalid("", "name") %} new-g-name-error{% endif %}"{% if form.invalid("", "name") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-g-name-hint">即 Clash 的 proxy-group 名；不能与内置策略（DIRECT / REJECT / PASS / GLOBAL）或任何节点重名。</p>
+          {% if form.invalid("", "name") %}<p class="field-error" id="new-g-name-error">{{ form.error("", "name") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-g-type">类型</label>
+          <select id="new-g-type" name="group_type" aria-describedby="new-g-type-hint">
+            <option value="select"{% if form.selected("", "group_type", "select", "select") %} selected{% endif %}>select —— 手动选择</option>
+            <option value="url-test"{% if form.selected("", "group_type", "select", "url-test") %} selected{% endif %}>url-test —— 自动选延迟最低</option>
+            <option value="fallback"{% if form.selected("", "group_type", "select", "fallback") %} selected{% endif %}>fallback —— 按顺序回退</option>
+            <option value="load-balance"{% if form.selected("", "group_type", "select", "load-balance") %} selected{% endif %}>load-balance —— 负载均衡</option>
+            <option value="relay"{% if form.selected("", "group_type", "select", "relay") %} selected{% endif %}>relay —— 链式代理</option>
+          </select>
+          <p class="hint" id="new-g-type-hint">测速由客户端自行完成，本服务不测速。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-url">测速 URL</label>
+          <input id="new-g-url" type="text" name="url" placeholder="http://www.gstatic.com/generate_204" value="{{ form.value("", "url", "") }}">
+        </div>
+        <div class="field">
+          <label for="new-g-interval">测速间隔（秒）</label>
+          <input id="new-g-interval" type="number" name="interval" placeholder="300" value="{{ form.value("", "interval", "") }}">
+        </div>
+        <div class="field">
+          <label for="new-g-regions">地区</label>
+          <input id="new-g-regions" type="text" name="regions" placeholder="美国, 日本" value="{{ form.value("", "regions", "") }}" aria-describedby="new-g-regions-hint">
+          <p class="hint" id="new-g-regions-hint">逗号分隔，取值来自地区别名表。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-keywords">关键词</label>
+          <input id="new-g-keywords" type="text" name="keywords" placeholder="GPT, re/^🇺🇸" value="{{ form.value("", "keywords", "") }}" aria-describedby="new-g-keywords-hint">
+          <p class="hint" id="new-g-keywords-hint">不区分大小写的子串匹配；<span class="mono">re/</span> 前缀启用正则。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-exclude">排除</label>
+          <input id="new-g-exclude" type="text" name="exclude" placeholder="香港" value="{{ form.value("", "exclude", "") }}" aria-describedby="new-g-exclude-hint">
+          <p class="hint" id="new-g-exclude-hint">地区名或关键词，命中即排除，优先级高于一切匹配条件。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-mode">地区与关键词的组合方式</label>
+          <select id="new-g-mode" name="mode">
+            <option value="any"{% if form.selected("", "mode", "any", "any") %} selected{% endif %}>any —— 任一命中即纳入（扩大范围）</option>
+            <option value="all"{% if form.selected("", "mode", "any", "all") %} selected{% endif %}>all —— 必须同时命中（缩小范围）</option>
+          </select>
+        </div>
+        <fieldset class="field">
+          <legend>手动子分组（其他分组）</legend>
+          {% if create_group_choices.is_empty() %}
+          <p class="hint">还没有其他分组。先创建地区分组，再回来把它们加入本组。</p>
+          {% else %}
+          <div data-checkbox-group>
+            <div class="select-list">
+              {% for c in create_group_choices %}
+              <label class="check"><input type="checkbox" name="manual_groups" value="{{ c.name }}"{% if c.checked %} checked{% endif %}> <span>{{ c.name }}</span></label>
+              {% endfor %}
+            </div>
+            {% include "partials/check_tools.html" %}
+          </div>
+          {% endif %}
+          <p class="hint">勾选后这些分组会作为本分组的成员（Clash 嵌套分组）；顺序按库内顺序，重命名会级联改写。</p>
+        </fieldset>
+        <div class="field">
+          <label for="new-g-mnodes">手动节点</label>
+          <div class="input-with-action">
+            <input id="new-g-mnodes" type="text" name="manual_nodes" value="{{ form.value("", "manual_nodes", "") }}" aria-describedby="new-g-mnodes-hint">
+            <button type="button" class="ghost small" data-node-picker="new-g-mnodes" hidden>选择节点</button>
+          </div>
+          <p class="hint" id="new-g-mnodes-hint">逗号分隔，写节点名；也可写 REJECT / DIRECT 等内置策略。脚本可用时可点「选择节点」勾选。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-fallback">备用分组</label>
+          <input id="new-g-fallback" type="text" name="fallback_group" value="{{ form.value("", "fallback_group", "") }}" aria-describedby="new-g-fallback-hint">
+          <p class="hint" id="new-g-fallback-hint">本分组为空时回退到的分组，配合方案的 fallback_group 策略使用。</p>
+        </div>
+        <div class="field">
+          <label for="new-g-extra">额外 Clash 字段</label>
+          <input id="new-g-extra" type="text" name="extra_yaml" placeholder="tolerance: 50" value="{{ form.value("", "extra_yaml", "") }}" aria-describedby="new-g-extra-hint{% if form.invalid("", "extra_yaml") %} new-g-extra-error{% endif %}"{% if form.invalid("", "extra_yaml") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-g-extra-hint">YAML 片段，原样写进该 proxy-group。</p>
+          {% if form.invalid("", "extra_yaml") %}<p class="field-error" id="new-g-extra-error">{{ form.error("", "extra_yaml") }}</p>{% endif %}
+        </div>
+      </div>
+
+      <fieldset class="field">
+        <legend>匹配范围</legend>
+        <label class="check" for="new-g-all">
+          <input id="new-g-all" type="checkbox" name="all"{% if form.checked("", "all", false) %} checked{% endif %}>
+          <span>match.all —— 命中<strong>全部</strong>节点
+            <span class="hint">所有节点都收进来，常用于「自动选择」。</span>
+          </span>
+        </label>
+        <label class="check" for="new-g-catch">
+          <input id="new-g-catch" type="checkbox" name="catch_all"{% if form.checked("", "catch_all", false) %} checked{% endif %}>
+          <span>match.catch_all —— 兜底
+            <span class="hint">只收录<strong>未被其他分组按匹配条件选中</strong>的节点（漏网之鱼）。</span>
+          </span>
+        </label>
+        <p class="hint" id="new-g-scope-hint">
+          两者语义相反：<span class="mono">all</span> 是「所有节点都进来」，
+          <span class="mono">catch_all</span> 是「别的分组不要的才进来」。
+          勾了 <span class="mono">catch_all</span> 后地区 / 关键词条件会被忽略，只保留排除与手动项。
+        </p>
+      </fieldset>
+
+      <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>创建分组</button>
+    </div>
+  </form>
+</dialog>
+
+{% if !groups.is_empty() %}
+<form id="group-reorder-form" method="post" action="/groups/reorder" hidden>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+</form>
+{% endif %}
+
+<h2>已有分组</h2>
+{% if groups.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有分组</p>
+  <p>分组决定节点怎么归类。点「新建分组」创建第一个，或直接添加「漏网之鱼」兜底分组。</p>
+</div>
+{% else %}
+<div class="entity-list">
+  {% for g in groups %}
+  <details class="card entity" data-group-drag data-group-name="{{ g.name }}"{% if form.scope == g.name && !form.is_empty() %} open{% endif %}>
+    <summary>
+      <span class="drag-handle" draggable="true" data-drag-handle hidden title="拖动排序" aria-hidden="true">⋮⋮</span>
+      <span class="entity-name">{{ g.name }}</span>
+      <span class="badge">{{ g.group_type }}</span>
+      {% if g.catch_all %}
+      <span class="badge empty">兜底 catch_all</span>
+      {% else %}
+        {% if g.all %}
+        <span class="badge">match.all 全部节点</span>
+        {% else %}
+        <span class="badge">{{ g.mode }}</span>
+        {% endif %}
+      {% endif %}
+      <span class="hint">被引用：{% if g.used_by.len() == 0 %}无{% else %}{{ g.used_by }}{% endif %}</span>
+    </summary>
+
+    <div class="entity-sort">
+      <div class="row-actions">
+        <form class="inline" method="post" action="/groups/move">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="name" value="{{ g.name }}">
+          <input type="hidden" name="direction" value="up">
+          <button class="small ghost" type="submit"{% if g.is_first %} disabled{% endif %}>↑ 上移</button>
+        </form>
+        <form class="inline" method="post" action="/groups/move">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="name" value="{{ g.name }}">
+          <input type="hidden" name="direction" value="down">
+          <button class="small ghost" type="submit"{% if g.is_last %} disabled{% endif %}>↓ 下移</button>
+        </form>
+      </div>
+      <span class="hint">拖动分组标题左侧手柄可直接排序；上移/下移是无 JS 时的替代与精确微调。</span>
+    </div>
+
+    <dl class="meta">
+      <dt>匹配条件</dt>
+      <dd>
+        {% if g.regions.len() > 0 %}地区 <span class="mono">{{ g.regions }}</span>　{% endif %}
+        {% if g.keywords.len() > 0 %}关键词 <span class="mono">{{ g.keywords }}</span>　{% endif %}
+        {% if g.exclude.len() > 0 %}排除 <span class="mono">{{ g.exclude }}</span>　{% endif %}
+        {% if g.all %}命中全部节点　{% endif %}
+        {% if g.catch_all %}兜底：收录未被其他分组匹配的节点　{% endif %}
+        {% if g.regions.len() == 0 && g.keywords.len() == 0 && !g.all && !g.catch_all %}未设置自动匹配条件，成员只来自手动项{% endif %}
+      </dd>
+      <dt>手动项</dt>
+      <dd>
+        子分组 <span class="mono">{{ g.manual_groups }}</span>　节点 <span class="mono">{{ g.manual_nodes }}</span>
+      </dd>
+      <dt>备用分组</dt>
+      <dd>{% if g.fallback_group.len() == 0 %}（未设置）{% else %}<span class="mono">{{ g.fallback_group }}</span>{% endif %}</dd>
+      <dt>被引用</dt>
+      <dd>{% if g.used_by.len() == 0 %}无引用，可直接删除{% else %}{{ g.used_by }}{% endif %}</dd>
+    </dl>
+
+    {% if g.raw_mentions.len() > 0 %}
+    <div class="notice warn" role="status">
+      <span class="notice-title">警告</span>：以下原始规则文本中出现了该分组名，重命名时<strong>无法自动改写</strong>，需人工核对：
+      <span class="mono">{{ g.raw_mentions }}</span>
+    </div>
+    {% endif %}
+
+    <form id="gf-{{ g.index_id }}" method="post" action="/groups">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="original_name" value="{{ g.name }}">
+      <div class="form-grid">
+        <div class="field">
+          <label for="gf-name-{{ g.index_id }}">分组名 <span class="req" aria-hidden="true">*</span></label>
+          <input id="gf-name-{{ g.index_id }}" type="text" name="name" value="{{ form.value(g.name, "name", g.name) }}" required aria-describedby="gf-name-{{ g.index_id }}-hint{% if form.invalid(g.name, "name") %} gf-name-{{ g.index_id }}-error{% endif %}"{% if form.invalid(g.name, "name") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="gf-name-{{ g.index_id }}-hint">改名会级联改写其他分组、规则与方案里的全部引用。</p>
+          {% if form.invalid(g.name, "name") %}<p class="field-error" id="gf-name-{{ g.index_id }}-error">{{ form.error(g.name, "name") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="gf-type-{{ g.index_id }}">类型</label>
+          <select id="gf-type-{{ g.index_id }}" name="group_type">
+            <option value="select"{% if form.selected(g.name, "group_type", g.group_type, "select") %} selected{% endif %}>select —— 手动选择</option>
+            <option value="url-test"{% if form.selected(g.name, "group_type", g.group_type, "url-test") %} selected{% endif %}>url-test —— 自动选延迟最低</option>
+            <option value="fallback"{% if form.selected(g.name, "group_type", g.group_type, "fallback") %} selected{% endif %}>fallback —— 按顺序回退</option>
+            <option value="load-balance"{% if form.selected(g.name, "group_type", g.group_type, "load-balance") %} selected{% endif %}>load-balance —— 负载均衡</option>
+            <option value="relay"{% if form.selected(g.name, "group_type", g.group_type, "relay") %} selected{% endif %}>relay —— 链式代理</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="gf-url-{{ g.index_id }}">测速 URL</label>
+          <input id="gf-url-{{ g.index_id }}" type="text" name="url" placeholder="留空则保持不变" value="{{ form.value(g.name, "url", "") }}">
+        </div>
+        <div class="field">
+          <label for="gf-interval-{{ g.index_id }}">测速间隔（秒）</label>
+          <input id="gf-interval-{{ g.index_id }}" type="number" name="interval" placeholder="留空则保持不变" value="{{ form.value(g.name, "interval", "") }}">
+        </div>
+        <div class="field">
+          <label for="gf-regions-{{ g.index_id }}">地区</label>
+          <input id="gf-regions-{{ g.index_id }}" type="text" name="regions" placeholder="美国, 日本" value="{{ form.value(g.name, "regions", g.regions) }}">
+        </div>
+        <div class="field">
+          <label for="gf-keywords-{{ g.index_id }}">关键词</label>
+          <input id="gf-keywords-{{ g.index_id }}" type="text" name="keywords" placeholder="GPT, re/^🇺🇸" value="{{ form.value(g.name, "keywords", g.keywords) }}">
+        </div>
+        <div class="field">
+          <label for="gf-exclude-{{ g.index_id }}">排除</label>
+          <input id="gf-exclude-{{ g.index_id }}" type="text" name="exclude" placeholder="香港" value="{{ form.value(g.name, "exclude", g.exclude) }}">
+        </div>
+        <div class="field">
+          <label for="gf-mode-{{ g.index_id }}">组合方式</label>
+          <select id="gf-mode-{{ g.index_id }}" name="mode">
+            <option value="any"{% if form.selected(g.name, "mode", g.mode, "any") %} selected{% endif %}>any —— 任一命中</option>
+            <option value="all"{% if form.selected(g.name, "mode", g.mode, "all") %} selected{% endif %}>all —— 必须同时命中</option>
+          </select>
+        </div>
+        <fieldset class="field">
+          <legend>手动子分组（其他分组）</legend>
+          {% if g.manual_group_choices.is_empty() %}
+          <p class="hint">还没有可引用的其他分组。</p>
+          {% else %}
+          <div data-checkbox-group>
+            <div class="select-list">
+              {% for c in g.manual_group_choices %}
+              <label class="check"><input type="checkbox" name="manual_groups" value="{{ c.name }}"{% if c.checked %} checked{% endif %}> <span>{{ c.name }}</span></label>
+              {% endfor %}
+            </div>
+            {% include "partials/check_tools.html" %}
+          </div>
+          {% endif %}
+          <p class="hint">勾选后这些分组会作为本分组成员；空分组会在导出时被省略并从成员中移除（有兜底分组时）。</p>
+        </fieldset>
+        <div class="field">
+          <label for="gf-mnodes-{{ g.index_id }}">手动节点</label>
+          <div class="input-with-action">
+            <input id="gf-mnodes-{{ g.index_id }}" type="text" name="manual_nodes" value="{{ form.value(g.name, "manual_nodes", g.manual_nodes) }}" aria-describedby="gf-mnodes-{{ g.index_id }}-hint">
+            <button type="button" class="ghost small" data-node-picker="gf-mnodes-{{ g.index_id }}" hidden>选择节点</button>
+          </div>
+          <p class="hint" id="gf-mnodes-{{ g.index_id }}-hint">可写节点名，也可写 REJECT / DIRECT 等内置策略。脚本可用时可点「选择节点」勾选。</p>
+        </div>
+        <div class="field">
+          <label for="gf-fallback-{{ g.index_id }}">备用分组</label>
+          <input id="gf-fallback-{{ g.index_id }}" type="text" name="fallback_group" value="{{ form.value(g.name, "fallback_group", g.fallback_group) }}">
+        </div>
+        <div class="field">
+          <label for="gf-extra-{{ g.index_id }}">额外 Clash 字段</label>
+          <input id="gf-extra-{{ g.index_id }}" type="text" name="extra_yaml" placeholder="tolerance: 50" value="{{ form.value(g.name, "extra_yaml", g.extra_yaml) }}" aria-describedby="gf-extra-{{ g.index_id }}-hint{% if form.invalid(g.name, "extra_yaml") %} gf-extra-{{ g.index_id }}-error{% endif %}"{% if form.invalid(g.name, "extra_yaml") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="gf-extra-{{ g.index_id }}-hint">YAML 片段，原样写进该 proxy-group。</p>
+          {% if form.invalid(g.name, "extra_yaml") %}<p class="field-error" id="gf-extra-{{ g.index_id }}-error">{{ form.error(g.name, "extra_yaml") }}</p>{% endif %}
+        </div>
+      </div>
+
+      <fieldset class="field">
+        <legend>匹配范围</legend>
+        <label class="check" for="gf-all-{{ g.index_id }}">
+          <input id="gf-all-{{ g.index_id }}" type="checkbox" name="all"{% if form.checked(g.name, "all", g.all) %} checked{% endif %}>
+          <span>match.all —— 命中<strong>全部</strong>节点</span>
+        </label>
+        <label class="check" for="gf-catch-{{ g.index_id }}">
+          <input id="gf-catch-{{ g.index_id }}" type="checkbox" name="catch_all"{% if form.checked(g.name, "catch_all", g.catch_all) %} checked{% endif %}>
+          <span>match.catch_all —— 兜底，收录未被其他分组按匹配条件选中的节点</span>
+        </label>
+      </fieldset>
+
+      <div class="form-actions">
+        <button>保存分组</button>
+      </div>
+    </form>
+  </details>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if !groups.is_empty() %}
+<h2>删除分组</h2>
+<div class="card form-narrow">
+  <p class="hint">
+    被引用的分组<strong>不能直接删除</strong>——必须指定替代分组，系统会把所有引用重定向过去。
+    未指定替代且仍有引用时会被拒绝，这是有意的：静默清空引用会让方案悄悄失效。
+  </p>
+  <form method="post" action="/groups/delete">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="del-g-name">要删除的分组 <span class="req" aria-hidden="true">*</span></label>
+        <select id="del-g-name" name="name" required>
+          {% for n in all_names %}<option value="{{ n }}"{% if form.selected("", "name", "", n) %} selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="del-g-replacement">替代分组</label>
+        <select id="del-g-replacement" name="replacement" aria-describedby="del-g-replacement-hint">
+          <option value="">（不指定）</option>
+          {% for n in all_names %}<option value="{{ n }}"{% if form.selected("", "replacement", "", n) %} selected{% endif %}>{{ n }}</option>{% endfor %}
+        </select>
+        <p class="hint" id="del-g-replacement-hint">留空时，只有该分组没有任何引用才允许删除。</p>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="danger"
+              data-confirm-title="删除分组"
+              data-confirm-ok="删除分组"
+              data-confirm="确认删除所选分组？引用它的规则、其他分组与方案都会被重定向到你指定的替代分组；没有指定替代且仍有引用时，操作会被拒绝。">删除分组</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<dialog id="node-picker" class="modal" aria-labelledby="node-picker-title">
+  <div class="modal-head">
+    <h2 id="node-picker-title">选择手动节点</h2>
+    <p class="hint">勾选后点「应用」，节点名会写回当前分组；手动填写的其他名称会保留。</p>
+  </div>
+  <div class="modal-body">
+    <div class="field">
+      <label for="node-picker-search">搜索节点</label>
+      <input id="node-picker-search" type="search" placeholder="按节点名过滤" autocomplete="off">
+    </div>
+    <div class="row-actions">
+      <button type="button" class="small ghost" data-node-pick-all>全选</button>
+      <button type="button" class="small ghost" data-node-pick-invert>反选</button>
+      <button type="button" class="small ghost" data-node-pick-clear>清空</button>
+    </div>
+    {% if node_names.is_empty() %}
+    <p class="hint">还没有可用节点。先到「手动节点」或「上游」添加。</p>
+    {% else %}
+    <div class="select-list" id="node-picker-list">
+      {% for n in node_names %}
+      <label class="check node-pick-item"><input type="checkbox" value="{{ n }}"> <span>{{ n }}</span></label>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="ghost" data-node-picker-close>取消</button>
+    <button type="button" data-node-picker-apply>应用</button>
+  </div>
+</dialog>
+{% endblock %}

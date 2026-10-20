@@ -1,0 +1,15 @@
+/target
+
+# 含密码，属密钥
+/config.toml
+
+# 业务数据与缓存：含上游订阅 token，不得入库
+/data/
+
+# 冒烟测试数据：同样含上游订阅 URL
+/data-smoke/
+
+# 发布产物
+/dist/
+*.zip
+*.tar.gz

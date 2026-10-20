@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}操作没有完成{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>操作没有完成</h1>
+  <p class="hint">请求已被服务端拒绝，因此没有写入任何数据。</p>
+</div>
+
+<div class="notice error" role="alert">
+  <p class="notice-title">被拒绝的原因</p>
+  <p class="mono">{{ message }}</p>
+</div>
+
+<p class="hint">
+  用浏览器的「返回」回到上一页，已经填写的内容会保留；修正后可以重新提交。
+</p>
+
+<div class="row-actions">
+  <button type="button" class="ghost" data-history-back hidden>返回上一页</button>
+  <a class="btn" href="/">回到方案列表</a>
+  <a class="btn ghost" href="/upstreams">查看上游状态</a>
+</div>
+{% endblock %}

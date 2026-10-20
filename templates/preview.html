@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}预览 · {{ slug }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>导出预览 · {{ slug }}</h1>
+  <div class="row-actions">
+    <a class="btn small ghost" href="/profiles/{{ slug }}">返回编辑</a>
+    <button type="button" class="btn small ghost" data-copy="{{ sub_url }}"{% if !has_token %} data-copy-warning="已复制，但未设订阅令牌，外部客户端会返回 401"{% endif %} hidden>复制链接</button>
+    <a class="btn small" href="{{ download_url }}">下载配置</a>
+    <a class="btn small ghost" href="{{ sub_url }}" target="_blank" rel="noopener">打开订阅输出</a>
+  </div>
+  <p class="hint">预览不落盘。下面是本次导出会生成的完整结果与全部校验结论。
+    {% if !has_token %}<span class="field-error">当前方案未设订阅令牌，外部客户端拉取会返回 401。</span>{% endif %}
+  </p>
+</div>
+
+{% if used_last_good %}
+<div class="notice warn" role="alert">
+  <span class="notice-title">本次使用的是 last_good 回退配置</span>，生成于 {{ last_good_at }}。
+  你的最新修改<strong>尚未生效</strong>，下方错误需要先修复。
+</div>
+{% endif %}
+
+{% if ok %}
+<div class="notice ok" role="status">
+  <span class="notice-title">校验通过</span>：可以导出。下方「最终配置」即为客户端将拉取到的内容。
+</div>
+{% else %}
+<div class="notice error" role="alert">
+  <span class="notice-title">校验未通过</span>：导出会被阻断，不会输出半成品配置。请按下方的错误清单逐项修复后重试。
+</div>
+{% endif %}
+
+{% if errors.len() > 0 %}
+<h2>错误（阻断导出）</h2>
+<div class="notice error" role="alert">
+  <ul class="tight">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if warnings.len() > 0 %}
+<h2>警告</h2>
+<div class="notice warn" role="status">
+  <ul class="tight">{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if conflicts.len() > 0 %}
+<h2>名称冲突</h2>
+<div class="notice warn" role="status">
+  <ul class="tight">{% for c in conflicts %}<li>{{ c }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if info.len() > 0 %}
+<h2>统计</h2>
+<div class="notice info" role="status">
+  <ul class="tight">{% for i in info %}<li>{{ i }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<h2>分组匹配详情</h2>
+<p class="hint">
+  入组原因能揭示「为什么这个节点会出现在这个分组里」。特别注意 any 模式下
+  <span class="mono">regions</span> 与 <span class="mono">keywords</span> 是<strong>或</strong>关系，
+  <span class="mono">日本 GPT</span> 这类节点会被「美国节点」分组收走。
+</p>
+{% if groups.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">没有分组可展示</p>
+  <p>本次方案没有选中任何分组，或者分组校验已经失败。回到编辑页勾选分组后重新预览。</p>
+</div>
+{% else %}
+<div class="table-wrap wide">
+<table>
+  <caption>共 {{ groups.len() }} 个分组</caption>
+  <thead>
+  <tr>
+    <th scope="col">分组</th>
+    <th scope="col" class="num">成员数</th>
+    <th scope="col" class="num">自动匹配</th>
+    <th scope="col">入组原因</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for g in groups %}
+  <tr>
+    <td>{{ g.name }}</td>
+    <td class="num">{{ g.members }}</td>
+    <td class="num">{{ g.auto }}</td>
+    <td class="hint">
+      {% if g.reasons.len() == 0 %}—{% else %}
+      <ul class="tight">{% for r in g.reasons %}<li class="mono">{{ r }}</li>{% endfor %}</ul>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2 id="final-config">最终配置</h2>
+<p class="hint">下面是客户端将拉取到的完整内容；区域可滚动，键盘聚焦后可用方向键查看。</p>
+<pre tabindex="0" aria-labelledby="final-config">{{ yaml }}</pre>
+{% endblock %}

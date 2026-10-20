@@ -1,0 +1,5 @@
+# 统一换行：仓库内以 LF 为准；Windows 脚本保持 CRLF，方便记事本/旧工具编辑。
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

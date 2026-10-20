@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}上游订阅{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>上游订阅</h1>
+  <div class="row-actions">
+    {# 触发入口是普通链接：没有 JS 时导航到 ?new=1，服务端把表单渲染成页内卡片。 #}
+    <a class="btn" href="/upstreams?new=1" data-dialog-open="upstream-create">新增上游</a>
+  </div>
+  <p class="hint">
+    上游是节点来源。刷新状态决定数据是否可用，套餐到期与数据年龄只影响告警级别；
+    两者独立呈现，任何一种都不会阻断导出。
+  </p>
+</div>
+
+{# 新增表单的错误显示在弹窗内部，这里只渲染页面上其他表单（行内编辑）的错误 #}
+{% if !form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+
+<dialog id="upstream-create" class="modal" aria-labelledby="upstream-create-title"{% if create_open %} open{% endif %}>
+  <form method="post" action="/upstreams">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="upstream-create-title">新增上游</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="new-up-name">名称 <span class="req" aria-hidden="true">*</span></label>
+          <input id="new-up-name" type="text" name="name" required data-autofocus placeholder="机场 A" value="{{ form.value("", "name", "") }}" aria-describedby="new-up-name-hint{% if form.invalid("", "name") %} new-up-name-error{% endif %}"{% if form.invalid("", "name") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-up-name-hint">只用于本页展示，可随时修改。</p>
+          {% if form.invalid("", "name") %}<p class="field-error" id="new-up-name-error">{{ form.error("", "name") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-up-id">id</label>
+          <input id="new-up-id" type="text" name="id" placeholder="airport-a" value="{{ form.value("", "id", "") }}" aria-describedby="new-up-id-hint{% if form.invalid("", "id") %} new-up-id-error{% endif %}"{% if form.invalid("", "id") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-up-id-hint">留空则按名称自动生成；只允许小写字母、数字与连字符，创建后不可更改。</p>
+          {% if form.invalid("", "id") %}<p class="field-error" id="new-up-id-error">{{ form.error("", "id") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-up-url">订阅 URL <span class="req" aria-hidden="true">*</span></label>
+          <input id="new-up-url" type="text" name="url" required placeholder="https://example.com/api/v1/client/subscribe?token=..." value="{{ form.value("", "url", "") }}" aria-describedby="new-up-url-hint{% if form.invalid("", "url") %} new-up-url-error{% endif %}"{% if form.invalid("", "url") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-up-url-hint">带 token 的完整地址。请求会带 Mihomo User-Agent，否则机场可能返回分享链接列表。</p>
+          {% if form.invalid("", "url") %}<p class="field-error" id="new-up-url-error">{{ form.error("", "url") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-up-note">备注</label>
+          <input id="new-up-note" type="text" name="note" value="{{ form.value("", "note", "") }}">
+        </div>
+      </div>
+      <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>添加上游</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="row-actions toolbar">
+  <form class="inline" method="post" action="/upstreams/refresh-all">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="ghost">刷新全部上游</button>
+  </form>
+  <span class="hint">拉取并发 {{ concurrency }} · 定期刷新间隔 {{ interval }} · 请求带 Mihomo User-Agent</span>
+</div>
+
+{% if rows.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有上游</p>
+  <p>点「新增上游」添加第一个机场订阅；也可以直接点「刷新全部上游」重试已有的订阅。</p>
+</div>
+{% else %}
+<div class="table-wrap wide dense">
+<table>
+  <caption>共 {{ rows.len() }} 个上游 · 修改后点「保存修改」，只改 URL 时原 token 会被保留</caption>
+  <thead>
+  <tr>
+    <th scope="col" id="up-col-name">名称</th>
+    <th scope="col" id="up-col-url">订阅地址（留空则不变）</th>
+    <th scope="col" id="up-col-status">刷新状态</th>
+    <th scope="col" id="up-col-nodes" class="num">节点数</th>
+    <th scope="col">数据年龄</th>
+    <th scope="col">套餐到期</th>
+    <th scope="col">流量</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>
+      <form id="uf-{{ r.id }}" method="post" action="/upstreams"></form>
+      <input form="uf-{{ r.id }}" type="hidden" name="csrf" value="{{ csrf }}">
+      <input form="uf-{{ r.id }}" type="hidden" name="original_id" value="{{ r.id }}">
+      <input form="uf-{{ r.id }}" type="text" name="name" value="{{ form.value(r.id, "name", r.name) }}" aria-labelledby="up-col-name"{% if form.invalid(r.id, "name") %} aria-invalid="true" aria-describedby="uf-name-{{ r.id }}-error"{% endif %}>
+      <div class="hint mono">id：{{ r.id }}</div>
+      {% if form.invalid(r.id, "name") %}<p class="field-error" id="uf-name-{{ r.id }}-error">{{ form.error(r.id, "name") }}</p>{% endif %}
+    </td>
+    <td>
+      <div class="hint mono">{{ r.url }}</div>
+      <input form="uf-{{ r.id }}" type="text" name="url" placeholder="留空保持原 URL" value="{{ form.value(r.id, "url", "") }}" aria-labelledby="up-col-url"{% if form.invalid(r.id, "url") %} aria-invalid="true" aria-describedby="uf-url-{{ r.id }}-error"{% endif %}>
+      <input form="uf-{{ r.id }}" type="hidden" name="note" value="{{ form.value(r.id, "note", r.note) }}">
+      {% if form.invalid(r.id, "url") %}<p class="field-error" id="uf-url-{{ r.id }}-error">{{ form.error(r.id, "url") }}</p>{% endif %}
+    </td>
+    <td>
+      <span class="badge {{ r.status_key }}">{{ r.status }}</span>
+      {% if r.error_kind.len() > 0 %}<div class="hint">{{ r.error_kind }}{% if r.last_error.len() > 0 %}：{{ r.last_error }}{% endif %}</div>{% endif %}
+      <div class="hint">最近尝试：{{ r.last_attempt }}</div>
+    </td>
+    <td class="num">
+      {{ r.node_count }}
+      {% if r.format.len() > 0 %}<div class="hint">{{ r.format }}</div>{% endif %}
+    </td>
+    <td>{{ r.data_age }}<div class="hint">成功于 {{ r.last_success }}</div></td>
+    <td>{{ r.expire }}</td>
+    <td class="hint">{{ r.traffic }}</td>
+    <td class="cell-actions">
+      <div class="row-actions">
+        <button form="uf-{{ r.id }}" class="small">保存修改</button>
+        <button form="uf-{{ r.id }}" formaction="/upstreams/{{ r.id }}/refresh" class="small ghost">立即刷新</button>
+        <button form="uf-{{ r.id }}" formaction="/upstreams/{{ r.id }}/accept" class="small ghost"
+                data-confirm-title="强制接受零节点响应"
+                data-confirm-ok="强制接受"
+                data-confirm="强制接受上游「{{ r.name }}」本次返回的零节点响应？只有确认订阅确实已被清空时才应使用：接受后现有缓存会被空数据覆盖，导出将不再有该上游的节点。">强制接受</button>
+        <button form="uf-{{ r.id }}" formaction="/upstreams/{{ r.id }}/delete" class="small danger"
+                data-confirm-title="删除上游"
+                data-confirm-ok="删除上游"
+                data-confirm="删除上游「{{ r.name }}」（{{ r.id }}）？它的缓存文件会被删除，所有引用它的方案会同步移除该选择，此操作不可撤销。">删除上游</button>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<p class="hint">
+  「陈旧」「空响应」「失败」都会继续使用旧数据导出，不会让配置文件变空。
+  只有从未成功拉取过的上游才会贡献 0 个节点。
+</p>
+{% endblock %}

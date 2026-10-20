@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}方案{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>导出方案</h1>
+  <div class="row-actions">
+    <a class="btn" href="/profiles/new">新建方案</a>
+  </div>
+  <p class="hint">
+    一套方案决定导出「哪些上游 + 哪些分组 + 哪些规则」，合并为一份 Clash 配置，
+    并通过独立订阅地址 /sub/&lt;slug&gt; 提供给客户端。
+    可直接<strong>复制完整订阅链接</strong>或<strong>下载配置文件</strong>；链接前缀在「通用设置 → 订阅链接」里配置。
+    <strong>外部客户端不会携带 Basic Auth，必须设置订阅令牌</strong>，否则拉取会返回 401。
+  </p>
+</div>
+
+{% if geo_available %}
+<div class="notice ok" role="status">
+  <span class="notice-title">GeoIP 库已加载</span>：<span class="mono">{{ geo_db }}</span>
+  {% if geo_db_type.len() > 0 %}（{{ geo_db_type }}{% if geo_build.len() > 0 %}，构建于 {{ geo_build }}{% endif %}）{% endif %}，
+  地区判定将综合节点名与 IP 归属地。
+  {% if geo_auto_update %}自动更新已开启，每 {{ geo_interval_days }} 天检查一次。{% else %}自动更新已关闭。{% endif %}
+  <a href="/general">在通用设置里管理</a>
+</div>
+{% else %}
+<div class="notice warn" role="status">
+  <span class="notice-title">GeoIP 库未安装</span>：<span class="mono">{{ geo_hint }}</span> 下没有 .mmdb 文件，
+  地区判定将只按节点名与别名表进行。这是可接受的降级状态，不影响导出。
+  <a href="/general">去通用设置下载</a>
+</div>
+{% endif %}
+
+<h2>方案</h2>
+{% if profiles.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有方案</p>
+  <p>方案是导出的入口。先添加至少一个上游订阅，再回来创建方案。</p>
+  <div class="row-actions">
+    <a class="btn" href="/profiles/new">新建方案</a>
+    <a class="btn ghost" href="/upstreams">先添加上游</a>
+  </div>
+</div>
+{% else %}
+<div class="table-wrap wide">
+<table>
+  <caption>共 {{ profiles.len() }} 套方案</caption>
+  <thead>
+  <tr>
+    <th scope="col">名称</th>
+    <th scope="col">选择内容</th>
+    <th scope="col">失败策略</th>
+    <th scope="col">订阅地址</th>
+    <th scope="col">最近一次成功生成</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for p in profiles %}
+  <tr>
+    <td>{{ p.name }}<div class="hint mono">{{ p.slug }}</div></td>
+    <td class="hint">上游 {{ p.upstreams }} · 分组 {{ p.groups }} · 规则 {{ p.rules }}</td>
+    <td>{{ p.on_failure }}</td>
+    <td>
+      <div class="mono">{{ p.sub_url }}</div>
+      {% if !p.has_token %}
+      <div class="hint">
+        <span class="field-error">未设订阅令牌</span>：外部客户端拉取会返回 401，
+        <a href="/profiles/{{ p.slug }}">去方案页生成</a>。
+      </div>
+      {% endif %}
+      <div class="row-actions">
+        <button type="button" class="small ghost" data-copy="{{ p.sub_url }}"{% if !p.has_token %} data-copy-warning="已复制，但未设订阅令牌，外部客户端会返回 401"{% endif %} hidden>复制链接</button>
+        <a class="btn small ghost" href="{{ p.download_url }}">下载配置</a>
+      </div>
+    </td>
+    <td class="hint">{{ p.last_good_at }}</td>
+    <td class="cell-actions">
+      <div class="row-actions">
+        <a class="btn small ghost" href="/profiles/{{ p.slug }}">编辑方案</a>
+        <form class="inline" method="post" action="/profiles/{{ p.slug }}/preview">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="small ghost">渲染预览</button>
+        </form>
+        <form class="inline" method="post" action="/profiles/{{ p.slug }}/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="small danger"
+                  data-confirm-title="删除方案"
+                  data-confirm-ok="删除方案"
+                  data-confirm="删除方案「{{ p.name }}」？订阅地址 /sub/{{ p.slug }} 会立即失效，已导入该地址的客户端将无法再拉取配置。此操作不可撤销。">删除方案</button>
+        </form>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2>上游健康</h2>
+{% if upstreams.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有上游</p>
+  <p>上游是节点来源。添加机场订阅后，这里会显示刷新状态、节点数与数据年龄。</p>
+  <div class="row-actions">
+    <a class="btn" href="/upstreams">去添加上游</a>
+  </div>
+</div>
+{% else %}
+<div class="table-wrap wide">
+<table>
+  <caption>共 {{ upstreams.len() }} 个上游 · 「陈旧」「空响应」「失败」都会继续使用旧数据导出</caption>
+  <thead>
+  <tr>
+    <th scope="col">名称</th>
+    <th scope="col">刷新状态</th>
+    <th scope="col" class="num">节点数</th>
+    <th scope="col">数据年龄</th>
+    <th scope="col">套餐到期</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for u in upstreams %}
+  <tr>
+    <td>{{ u.name }}<div class="hint mono">{{ u.id }}</div></td>
+    <td>
+      <span class="badge {{ u.status_key }}">{{ u.status }}</span>
+      {% if u.last_error.len() > 0 %}<div class="hint">{{ u.error_kind }}：{{ u.last_error }}</div>{% endif %}
+    </td>
+    <td class="num">{{ u.node_count }}</td>
+    <td>{{ u.data_age }}</td>
+    <td>{{ u.expire }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

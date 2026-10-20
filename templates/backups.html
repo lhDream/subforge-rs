@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}备份{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>数据备份与恢复</h1>
+  <p class="hint">
+    <span class="mono">data/</span> 里含有上游订阅 token，因此<strong>不能提交到版本库</strong>——
+    这也意味着它没有版本历史。所以每次写入 <span class="mono">store.yaml</span> 前都会自动备份一份，
+    这是你唯一的回滚手段。
+  </p>
+</div>
+
+{% if let Some(p) = preview %}
+<div class="card">
+  <h2>恢复预览：{{ p.name }}</h2>
+  <p class="hint">
+    当前 revision <span class="mono">{{ p.current_revision }}</span> →
+    备份 revision <span class="mono">{{ p.backup_revision }}</span>；
+    备份时间 {{ p.created_at }}。恢复前会先把当前状态自动备份一次。
+  </p>
+  {% if p.empty %}
+  <div class="notice" role="status">备份与当前数据没有差异。</div>
+  {% else %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr>
+        <th scope="col">类别</th>
+        <th scope="col">恢复后新增</th>
+        <th scope="col">恢复后删除</th>
+        <th scope="col">恢复后修改</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for r in p.rows %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td class="mono">{{ r.added }}</td>
+        <td class="mono">{{ r.removed }}</td>
+        <td class="mono">{{ r.changed }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  <form method="post" action="/backups/restore">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="name" value="{{ p.name }}">
+    <div class="form-actions">
+      <button class="danger"
+              data-confirm-title="恢复备份"
+              data-confirm-ok="恢复这份备份"
+              data-confirm="确认用备份「{{ p.name }}」覆盖当前全部业务数据？当前状态会先被自动备份。">确认恢复</button>
+      <a class="btn ghost" href="/backups">取消</a>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<h2>可用备份</h2>
+{% if rows.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有备份</p>
+  <p>第一次保存配置（上游、分组、规则、通用设置或方案）之后，这里就会出现自动备份。</p>
+</div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <caption>共 {{ rows.len() }} 份备份 · 恢复前会先把当前状态自动备份一次，因此恢复本身也可以回滚</caption>
+  <thead>
+  <tr>
+    <th scope="col">备份文件</th>
+    <th scope="col">创建时间</th>
+    <th scope="col" class="num">大小</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for b in rows %}
+  <tr>
+    <td class="mono">{{ b.name }}</td>
+    <td class="hint">{{ b.created_at }}</td>
+    <td class="num">{{ b.size }}</td>
+    <td class="cell-actions">
+      <div class="row-actions">
+        <a class="small ghost" href="/backups?preview={{ b.name }}">预览差异</a>
+        <form class="inline" method="post" action="/backups/restore">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="name" value="{{ b.name }}">
+          <button class="small danger"
+                  data-confirm-title="恢复备份"
+                  data-confirm-ok="恢复这份备份"
+                  data-confirm="用备份「{{ b.name }}」（创建于 {{ b.created_at }}）覆盖当前的全部业务数据？当前状态会先被自动备份，如果恢复后发现问题，可以用同样方式回滚。">恢复</button>
+        </form>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

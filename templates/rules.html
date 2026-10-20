@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}路由规则{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>路由规则</h1>
+  <div class="row-actions">
+    <a class="btn" href="/rules?new=1" data-dialog-open="rule-create">新增规则</a>
+    <a class="btn ghost" href="/rules?import=1" data-dialog-open="rule-import">批量导入</a>
+  </div>
+  <p class="hint">
+    导出顺序固定为：<strong>强制覆盖 → 普通规则 → 兜底</strong>。
+  </p>
+</div>
+
+{# 新增 / 导入表单的错误显示在各自弹窗内部，这里只渲染其他表单的错误 #}
+{% if !form.is_empty() && !form.scope.is_empty() && form.scope != "import" %}{% include "partials/form_errors.html" %}{% endif %}
+
+<div class="notice warn" role="status">
+  <span class="notice-title">必须有一条 MATCH 兜底</span>：缺少 MATCH 并不会让配置非法——Mihomo 会把未命中的流量
+  <strong>静默回退到 DIRECT</strong>，绕过你的路由与隐私意图。因此本服务把「没有兜底」当作错误拦截。
+</div>
+
+<dialog id="rule-create" class="modal" aria-labelledby="rule-create-title"{% if add_open %} open{% endif %}>
+  <form method="post" action="/rules">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="rule-create-title">手动新增规则</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="form-grid">
+        <div class="field">
+          <label for="new-r-section">分段 <span class="req" aria-hidden="true">*</span></label>
+          <select id="new-r-section" name="section" required data-autofocus{% if form.invalid("", "section") %} aria-invalid="true" aria-describedby="new-r-section-error"{% endif %}>
+            <option value="override"{% if form.selected("", "section", "normal", "override") %} selected{% endif %}>override —— 强制覆盖（最高优先级）</option>
+            <option value="normal"{% if form.selected("", "section", "normal", "normal") %} selected{% endif %}>normal —— 普通路由</option>
+            <option value="final"{% if form.selected("", "section", "normal", "final") %} selected{% endif %}>final —— 最终兜底（MATCH）</option>
+          </select>
+          {% if form.invalid("", "section") %}<p class="field-error" id="new-r-section-error">{{ form.error("", "section") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-r-type">类型</label>
+          <input id="new-r-type" type="text" name="type" placeholder="DOMAIN-SUFFIX / GEOIP / IP-CIDR / MATCH" value="{{ form.value("", "type", "") }}" aria-describedby="new-r-type-hint{% if form.invalid("", "type") %} new-r-type-error{% endif %}"{% if form.invalid("", "type") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-r-type-hint">留空并填写下面的「原始规则」时，本字段被忽略。</p>
+          {% if form.invalid("", "type") %}<p class="field-error" id="new-r-type-error">{{ form.error("", "type") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-r-payload">内容</label>
+          <input id="new-r-payload" type="text" name="payload" placeholder="openai.com / CN / 1.2.3.0/24" value="{{ form.value("", "payload", "") }}" aria-describedby="new-r-payload-hint{% if form.invalid("", "payload") %} new-r-payload-error{% endif %}"{% if form.invalid("", "payload") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-r-payload-hint">MATCH 没有内容，留空即可。</p>
+          {% if form.invalid("", "payload") %}<p class="field-error" id="new-r-payload-error">{{ form.error("", "payload") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-r-target">目标</label>
+          <input id="new-r-target" type="text" name="target" list="group-list" placeholder="分组名 / DIRECT / REJECT" value="{{ form.value("", "target", "") }}"{% if form.invalid("", "target") %} aria-invalid="true" aria-describedby="new-r-target-error"{% endif %}>
+          <datalist id="group-list">{% for g in group_names %}<option value="{{ g }}"></option>{% endfor %}</datalist>
+          {% if form.invalid("", "target") %}<p class="field-error" id="new-r-target-error">{{ form.error("", "target") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-r-params">附加参数</label>
+          <input id="new-r-params" type="text" name="params" placeholder="no-resolve" value="{{ form.value("", "params", "") }}" aria-describedby="new-r-params-hint{% if form.invalid("", "params") %} new-r-params-error{% endif %}"{% if form.invalid("", "params") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-r-params-hint">逗号分隔。参数写在目标<strong>之后</strong>：<span class="mono">IP-CIDR,1.2.3.0/24,目标,no-resolve</span>；写成目标在末尾会让 Mihomo 把 <span class="mono">no-resolve</span> 当成目标。</p>
+          {% if form.invalid("", "params") %}<p class="field-error" id="new-r-params-error">{{ form.error("", "params") }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="new-r-raw">原始规则（可选）</label>
+          <input id="new-r-raw" type="text" name="raw" class="code" placeholder="AND,((NETWORK,tcp)),PROXY" value="{{ form.value("", "raw", "") }}" aria-describedby="new-r-raw-hint{% if form.invalid("", "raw") %} new-r-raw-error{% endif %}"{% if form.invalid("", "raw") %} aria-invalid="true"{% endif %}>
+          <p class="hint" id="new-r-raw-hint">填了则忽略上面的类型 / 内容 / 参数。原始模式不参与分组引用检查与目标校验。</p>
+          {% if form.invalid("", "raw") %}<p class="field-error" id="new-r-raw-error">{{ form.error("", "raw") }}</p>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>添加规则</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="rule-import" class="modal" aria-labelledby="rule-import-title"{% if import_open %} open{% endif %}>
+  <form method="post" action="/rules/import">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="modal-head">
+      <h2 id="rule-import-title">批量粘贴导入</h2>
+      <button type="button" class="ghost small" data-dialog-close>关闭</button>
+    </div>
+    <div class="modal-body">
+      {% if form.scope == "import" %}{% include "partials/form_errors.html" %}{% endif %}
+      <div class="field">
+        <label for="import-section">分段 <span class="req" aria-hidden="true">*</span></label>
+        <select id="import-section" name="section" required{% if form.invalid("import", "section") %} aria-invalid="true" aria-describedby="import-section-error"{% endif %}>
+          <option value="override"{% if form.selected("import", "section", "normal", "override") %} selected{% endif %}>override —— 强制覆盖</option>
+          <option value="normal"{% if form.selected("import", "section", "normal", "normal") %} selected{% endif %}>normal —— 普通路由</option>
+          <option value="final"{% if form.selected("import", "section", "normal", "final") %} selected{% endif %}>final —— 最终兜底</option>
+        </select>
+        {% if form.invalid("import", "section") %}<p class="field-error" id="import-section-error">{{ form.error("import", "section") }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="import-text">每行一条规则 <span class="req" aria-hidden="true">*</span></label>
+        <textarea id="import-text" name="text" rows="8" class="code" required data-autofocus placeholder="DOMAIN-SUFFIX,openai.com,美国节点
+GEOIP,CN,DIRECT
+MATCH,自动选择" aria-describedby="import-text-hint{% if form.invalid("import", "text") %} import-text-error{% endif %}"{% if form.invalid("import", "text") %} aria-invalid="true"{% endif %}>{{ form.value("import", "text", "") }}</textarea>
+        <p class="hint" id="import-text-hint">以 # 开头的行视为注释。</p>
+        {% if form.invalid("import", "text") %}<p class="field-error" id="import-text-error">{{ form.error("import", "text") }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="ghost" data-dialog-close>取消</button>
+      <button>导入规则</button>
+    </div>
+  </form>
+</dialog>
+
+<h2>规则列表</h2>
+{% if rows.is_empty() %}
+<div class="empty-state">
+  <p class="empty-title">还没有规则</p>
+  <p>至少需要一条 <span class="mono">MATCH</span> 兜底，否则导出会被拦截。点「新增规则」手动添加，或「批量导入」粘贴多行。</p>
+</div>
+{% else %}
+<div class="table-wrap wide">
+<table>
+  <caption>共 {{ rows.len() }} 条规则 · 展开顺序为 override → normal → final</caption>
+  <thead>
+  <tr>
+    <th scope="col" class="num">序号</th>
+    <th scope="col">分段</th>
+    <th scope="col">规则</th>
+    <th scope="col">解析方式</th>
+    <th scope="col">操作</th>
+  </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="num">{{ r.index }}</td>
+    <td>{{ r.section_label }}</td>
+    <td class="mono">
+      {{ r.effective }}
+      {% if r.is_raw %}<div class="hint">原始模式：不参与分组引用检查与目标校验</div>{% endif %}
+    </td>
+    <td class="hint">{% if r.is_raw %}原样输出{% else %}按 Mihomo 语义解析条件、目标与参数{% endif %}</td>
+    <td class="cell-actions">
+      <div class="row-actions">
+        <form class="inline" method="post" action="/rules/move">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="id" value="{{ r.id }}">
+          <button class="small ghost" name="dir" value="up" aria-label="把第 {{ r.index }} 条规则上移一位">↑</button>
+          <button class="small ghost" name="dir" value="down" aria-label="把第 {{ r.index }} 条规则下移一位">↓</button>
+        </form>
+        <form class="inline" method="post" action="/rules/{{ r.id }}/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="small danger"
+                  data-confirm-title="删除规则"
+                  data-confirm-ok="删除规则"
+                  data-confirm="删除第 {{ r.index }} 条规则「{{ r.effective }}」？它会从所有引用它的方案中移除，此操作不可撤销。">删除规则</button>
+        </form>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

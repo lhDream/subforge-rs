@@ -1,0 +1,11 @@
+{# 校验失败时的错误摘要与回填提示（规范 §6「长表单可增加错误摘要」）。
+   依赖当前模板结构体上的 `form: FormEcho` 字段；无错误时不渲染任何内容。 #}
+{% if !form.is_empty() %}
+<div class="notice error" role="alert">
+  <p class="notice-title">提交未生效，请先修正下列问题</p>
+  <ul class="tight">
+    {% for e in form.errors() %}<li><strong>{{ e.label }}</strong>：{{ e.message }}</li>{% endfor %}
+  </ul>
+  <p class="hint">你填写的内容已经保留在这一页，修正后可以直接重新提交。</p>
+</div>
+{% endif %}
