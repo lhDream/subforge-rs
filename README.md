@@ -225,6 +225,20 @@ bash scripts/package-linux.sh
 
 镜像不携带任何密码，数据通过 `/data` volume 持久化。
 
+已发布镜像（GitHub Container Registry，linux/amd64）：
+
+```bash
+docker pull ghcr.io/lhdream/subforge-rs:0.1.0
+# 或跟随最新：
+docker pull ghcr.io/lhdream/subforge-rs:latest
+```
+
+本地构建：
+
+```bash
+docker build -t subforge-rs:0.1.0 .
+```
+
 自动生成密码：
 
 ```bash

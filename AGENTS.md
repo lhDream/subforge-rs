@@ -840,6 +840,13 @@ cargo clippy --all-targets -- -D warnings
 
 ## 12. 变更记录
 
+- **v44**：新增 GitHub Actions 构建并发布 Docker 镜像到 GHCR。**未改数据格式。**
+  - 新增 `.github/workflows/docker.yml`：在 `v*` tag 或手动触发时构建并推送
+    `ghcr.io/lhdream/subforge-rs`（`0.1.0` / `0.1` / `latest`，linux/amd64）。
+  - 镜像 digest：`sha256:2c8375793e91e43d0f56aade252f73277a184cfc58a072f5c9ae8e9a4644f6c3`。
+  - README 增加 GHCR 拉取方式。
+  - 说明：arm64 暂未构建，后续可用原生 arm runner 追加，避免 QEMU 下 Rust 构建过慢。
+
 - **v43**：项目采用 **AGPL-3.0-only** 开源协议。**未改数据格式。**
   - 新增根目录 `LICENSE`（GNU Affero General Public License v3.0 完整文本）；
   - `Cargo.toml` 增加 `license = "AGPL-3.0-only"`；`Dockerfile` 的
