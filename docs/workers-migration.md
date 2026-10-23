@@ -84,8 +84,8 @@ revision 乐观锁 + 所有读共用同一份快照」。DO 每实例单线程�
 | **P1** ✅ | Workers MVP：DO「Core」单写者存 store（revision + 上一版）、R2 缓存、导出链路、Basic Auth、`/admin/store` 导入；`wrangler.jsonc` | `worker-build` + `wrangler dev` 下：导入 native `store.yaml` → `/sub/{slug}` 返回可加载的 Clash YAML |
 | **P2** ✅ | 存储抽象：`Storage`（native 文件系统 / wasm DO+R2）；`cache`/`lastgood`/`store` 异步化；原生 205 测试保持绿 | native 行为不变；`cargo test` / clippy 双目标通过 |
 | **P3** ✅ | wasm 平台实现：`config`（vars/secrets）、`refresh`（Fetch）、`geoip`（R2 + 无 DNS 降级）、`geoip_update`（Fetch + R2）、`proxy`（校验/脱敏）；解除 `web`/`pipeline` 门控，管理页整体上线 | 线上 9 个管理页 + 静态资源 200；表单写入 303；`/sub/{slug}` 导出正常 |
-| **P4** | Cron 刷新（定时任务）、GeoIP 自动更新的定期化、ETag/304、`last_good` 线上验证 | 与 native 行为对齐 |
-| **P5** | 部署文档、数据导入工具、CI | 可重复部署；双目标文档齐 |
+| **P4** ✅ | Cron 定时刷新（`15 */6 * * *`）+ GeoIP 按期更新；`#[event(scheduled)]` 复用 `refresh_due` 与到期判断 | 本地 `/cdn-cgi/local/scheduled` 200；部署输出注册 `schedule: 15 */6 * * *` |
+| **P5** | 部署文档、数据导入工具、CI；Workers 上的 ETag/304 与 `last_good` 实测 | 可重复部署；双目标文档齐 |
 
 ### 4.1 迁移策略：向共享层收敛（当前）
 

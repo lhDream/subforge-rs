@@ -13,5 +13,7 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Core"] }],
   "r2_buckets": [{ "binding": "CACHE", "bucket_name": "subforge-cache" }],
+  // 每 6 小时检查一次：只刷新到期上游；GeoIP 按设置的天数决定是否更新。
+  "triggers": { "crons": ["15 */6 * * *"] },
   "observability": { "enabled": true }
 }

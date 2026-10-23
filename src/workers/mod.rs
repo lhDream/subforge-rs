@@ -91,3 +91,58 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> worker::Result<Http
     };
     Ok(response)
 }
+
+/// Cron 触发：刷新到期上游，并按设置更新 GeoIP 库。
+///
+/// 与 native 的 `spawn_periodic` 语义一致（只处理到期项）；Workers 上没有常驻进程，
+/// 由 `wrangler.jsonc` 的 `triggers.crons` 驱动。
+#[worker::event(scheduled)]
+async fn scheduled(event: worker::ScheduledEvent, env: Env, _ctx: worker::ScheduleContext) {
+    console_error_panic_hook::set_once();
+    if let Err(e) = run_scheduled(event, env).await {
+        tracing::error!("cron 任务失败：{e}");
+    }
+}
+
+async fn run_scheduled(event: worker::ScheduledEvent, env: Env) -> worker::Result<()> {
+    let state = app_state(env).await.map_err(worker::Error::RustError)?;
+    tracing::info!("cron 触发：{}", event.cron());
+
+    let interval = state.cfg.refresh_interval;
+    let outcomes = state.refresher.refresh_due(interval).await;
+    for outcome in &outcomes {
+        tracing::info!(
+            "cron 刷新上游 {}：{:?}，{} 个节点",
+            outcome.upstream_id,
+            outcome.status,
+            outcome.node_count
+        );
+    }
+
+    let snapshot = state.store.snapshot().await;
+    let settings = snapshot.settings.geoip.clone();
+    drop(snapshot);
+    let status = state.geoip.status();
+    if geoip_due(&status, &settings, chrono::Utc::now()) {
+        match state.geoip.update("cron", false).await {
+            Ok(result) => tracing::info!("cron 更新 GeoIP：{}", result.message),
+            Err(e) => tracing::warn!("cron 更新 GeoIP 失败：{e:#}"),
+        }
+    }
+    Ok(())
+}
+
+fn geoip_due(
+    status: &crate::geoip_update::GeoipStatus,
+    settings: &crate::store::model::GeoipSettings,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    if !settings.auto_update {
+        return false;
+    }
+    let Some(last) = status.last_success_at else {
+        return true;
+    };
+    let interval = chrono::Duration::days(i64::from(settings.interval_days_clamped()));
+    now.signed_duration_since(last) >= interval
+}

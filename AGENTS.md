@@ -877,8 +877,10 @@ cargo clippy --all-targets -- -D warnings
     否则由管理密码派生），否则多 isolate 下表单校验会随机失败。
   - 验证：**205 项 Rust 测试**、双目标 clippy/fmt 通过；线上
     `https://subforge-rs.luhuadream.workers.dev` 九页 200、表单写入 303、`/sub/{slug}` 导出正常。
-  - 已知限制（Workers）：无 Cron 定时刷新（用上游页「立即刷新」）、出口代理设置不生效、
-    GeoIP 无 DNS 解析、`wrangler r2 object` CLI 需加 `--remote` 才能看到线上对象。
+  - 已知限制（Workers）：出口代理设置不生效（`worker::Fetch` 不支持）、GeoIP 无 DNS 解析
+    （域名节点只按名字判定）、`wrangler r2 object` CLI 需加 `--remote` 才能看到线上对象。
+  - 定时任务：`#[event(scheduled)]` + `wrangler.jsonc` 的 `triggers.crons`（`15 */6 * * *`），
+    只刷新到期上游；GeoIP 按 `settings.geoip.interval_days` 判断是否更新。
 
 - **v47**：出口代理改为**网页可配**（通用设置页），并修掉一个复选框回显缺陷。**未改 FORMAT_VERSION。**
   - `AppSettings.proxy`（`ProxySettings { enabled, url, configured }`）：纯新增可选字段。
