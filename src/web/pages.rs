@@ -602,7 +602,7 @@ pub async fn index(
         profiles,
         upstreams,
         geo_available: state.geo.is_available(),
-        geo_hint: state.store.data_dir().join("geoip").display().to_string(),
+        geo_hint: state.store.storage_label(),
         geo_db: state
             .geo
             .db_path()
@@ -935,9 +935,12 @@ async fn available_node_names(state: &Arc<AppState>, snapshot: &Store) -> Vec<St
             bodies.push((upstream.id.clone(), env.body));
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
     let names = tokio::task::spawn_blocking(move || collect_node_names(&snapshot, bodies))
         .await
         .unwrap_or_default();
+    #[cfg(target_arch = "wasm32")]
+    let names = collect_node_names(&snapshot, bodies);
     *state.node_names_cache.write().await = Some((signature, names.clone()));
     names
 }
@@ -2110,13 +2113,11 @@ fn geoip_view(
             .as_ref()
             .map(|i| i.path.display().to_string())
             .unwrap_or_else(|| {
-                state
-                    .store
-                    .data_dir()
-                    .join("geoip")
-                    .join(geoip_update::AUTO_DB_FILE)
-                    .display()
-                    .to_string()
+                format!(
+                    "{}/geoip/{}",
+                    state.store.storage_label(),
+                    geoip_update::AUTO_DB_FILE
+                )
             }),
         db_type: info
             .as_ref()

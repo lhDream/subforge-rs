@@ -30,26 +30,52 @@ pub mod validate;
 #[path = "match.rs"]
 pub mod matcher;
 
+// ---------------------------------------------------------------- 平台实现
+//
+// 同名模块、两套实现：共享的 `web`/`pipeline` 只依赖 API，不关心后端。
+
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "config.rs"]
+pub mod config;
+#[cfg(target_arch = "wasm32")]
+#[path = "config_wasm.rs"]
+pub mod config;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "geoip.rs"]
+pub mod geoip;
+#[cfg(target_arch = "wasm32")]
+#[path = "geoip_wasm.rs"]
+pub mod geoip;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "geoip_update.rs"]
+pub mod geoip_update;
+#[cfg(target_arch = "wasm32")]
+#[path = "geoip_update_wasm.rs"]
+pub mod geoip_update;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod refresh;
+#[cfg(target_arch = "wasm32")]
+#[path = "refresh_wasm.rs"]
+pub mod refresh;
+
+pub mod lastgood;
+pub mod pipeline;
+pub mod web;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "proxy.rs"]
+pub mod proxy;
+#[cfg(target_arch = "wasm32")]
+#[path = "proxy_wasm.rs"]
+pub mod proxy;
+
 // ---------------------------------------------------------------- native only
 
 #[cfg(not(target_arch = "wasm32"))]
-pub mod config;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod geoip;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod geoip_update;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod lastgood;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod native;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod pipeline;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod proxy;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod refresh;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod web;
 
 // ---------------------------------------------------------------- wasm only
 

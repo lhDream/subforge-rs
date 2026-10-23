@@ -210,6 +210,18 @@ impl StoreHandle {
         self.inner.storage.root()
     }
 
+    /// 展示用的存储位置描述（页面提示用；不参与逻辑）。
+    pub fn storage_label(&self) -> String {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.inner.storage.root().display().to_string()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            "R2 + Durable Object".to_string()
+        }
+    }
+
     // ---------------------------------------------------------- 读
 
     /// 取当前快照。导出全程持有同一份快照，保证一致性。

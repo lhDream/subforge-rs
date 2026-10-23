@@ -3,20 +3,18 @@
 //!
 //! 为什么所有小对象都过 DO：DO 是单写者，天然串行化「读-改-写」，
 //! 与 native 的写锁语义一一对应（AGENTS.md §8.2）。R2 只承担不可变的大对象。
+//!
+//! 所有对外方法都用 `SendFuture` 包住内部实现：worker 绑定的 `JsFuture` 是 `!Send`，
+//! 而共享的 axum handler 要求 future 为 `Send`（Workers 单线程，包装是安全的）。
 
 use super::{ObjectMeta, valid_key};
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
-use worker::send::SendWrapper;
-use worker::{Bucket, Env, Fetch, Method, Request, RequestInit};
+use worker::send::{SendFuture, SendWrapper};
+use worker::{Bucket, Env, Method, Request, RequestInit};
 
 /// R2 绑定名（见 `wrangler.jsonc`）。
 pub const R2_BINDING: &str = "CACHE";
-
-/// 哪些 key 放 R2。
-fn is_r2_key(key: &str) -> bool {
-    key.starts_with("cache/") || (key.starts_with("geoip/") && key.ends_with(".mmdb"))
-}
 
 #[derive(Clone)]
 pub struct Storage {
@@ -31,8 +29,12 @@ impl Storage {
     }
 
     /// 对象存储没有目录概念；保留与 native 同名方法方便共用启动逻辑。
-    pub fn ensure_dirs(&self) -> anyhow::Result<()> {
+    pub fn ensure_dirs(&self) -> Result<()> {
         Ok(())
+    }
+
+    pub fn env(&self) -> &Env {
+        &self.env
     }
 
     fn bucket(&self) -> Result<Bucket> {
@@ -55,8 +57,17 @@ impl Storage {
         }
         let request = Request::new_with_init(&url, &init)
             .map_err(|e| anyhow::anyhow!("构造 DO 请求失败：{e}"))?;
-        let mut resp = Fetch::Request(request)
-            .send()
+        // 必须走 Durable Object stub；普通 Fetch 会发往外网。
+        let stub = self
+            .env
+            .durable_object("CORE")
+            .map_err(|e| anyhow::anyhow!("绑定 CORE 不可用：{e}"))?
+            .id_from_name("singleton")
+            .map_err(|e| anyhow::anyhow!("DO 实例名无效：{e}"))?
+            .get_stub()
+            .map_err(|e| anyhow::anyhow!("获取 DO stub 失败：{e}"))?;
+        let mut resp = stub
+            .fetch_with_request(request)
             .await
             .map_err(|e| anyhow::anyhow!("调用 DO 失败：{e}"))?;
         let status = resp.status_code();
@@ -71,6 +82,12 @@ impl Storage {
     }
 
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let key = key.to_string();
+        let this = self.clone();
+        SendFuture::new(async move { this.get_inner(&key).await }).await
+    }
+
+    async fn get_inner(&self, key: &str) -> Result<Option<Vec<u8>>> {
         if !valid_key(key) {
             bail!("非法的存储 key：{key}");
         }
@@ -94,10 +111,10 @@ impl Storage {
             return Ok(Some(bytes));
         }
 
-        let resp = self
+        match self
             .do_request(Method::Get, &format!("/obj/{key}"), None)
-            .await;
-        match resp {
+            .await
+        {
             Ok(bytes) => Ok(Some(bytes)),
             Err(e) if e.to_string().contains("HTTP 404") => Ok(None),
             Err(e) => Err(e),
@@ -105,7 +122,13 @@ impl Storage {
     }
 
     pub async fn get_string(&self, key: &str) -> Result<Option<String>> {
-        match self.get(key).await? {
+        let key = key.to_string();
+        let this = self.clone();
+        SendFuture::new(async move { this.get_string_inner(&key).await }).await
+    }
+
+    async fn get_string_inner(&self, key: &str) -> Result<Option<String>> {
+        match self.get_inner(key).await? {
             Some(bytes) => Ok(Some(
                 String::from_utf8(bytes).map_err(|_| anyhow::anyhow!("内容不是 UTF-8：{key}"))?,
             )),
@@ -114,6 +137,13 @@ impl Storage {
     }
 
     pub async fn put(&self, key: &str, bytes: &[u8]) -> Result<()> {
+        let key = key.to_string();
+        let bytes = bytes.to_vec();
+        let this = self.clone();
+        SendFuture::new(async move { this.put_inner(&key, &bytes).await }).await
+    }
+
+    async fn put_inner(&self, key: &str, bytes: &[u8]) -> Result<()> {
         if !valid_key(key) {
             bail!("非法的存储 key：{key}");
         }
@@ -139,6 +169,12 @@ impl Storage {
     }
 
     pub async fn delete(&self, key: &str) -> Result<()> {
+        let key = key.to_string();
+        let this = self.clone();
+        SendFuture::new(async move { this.delete_inner(&key).await }).await
+    }
+
+    async fn delete_inner(&self, key: &str) -> Result<()> {
         if !valid_key(key) {
             bail!("非法的存储 key：{key}");
         }
@@ -150,7 +186,6 @@ impl Storage {
                 .map_err(|e| anyhow::anyhow!("删除 R2 对象失败：{e}"))?;
             return Ok(());
         }
-        // DO 删除用 DELETE /obj/{key}；404 视为已是删除状态。
         match self
             .do_request(Method::Delete, &format!("/obj/{key}"), None)
             .await
@@ -162,6 +197,30 @@ impl Storage {
     }
 
     pub async fn list(&self, prefix: &str) -> Result<Vec<ObjectMeta>> {
+        let prefix = prefix.to_string();
+        let this = self.clone();
+        SendFuture::new(async move { this.list_inner(&prefix).await }).await
+    }
+
+    async fn list_inner(&self, prefix: &str) -> Result<Vec<ObjectMeta>> {
+        let mut out = Vec::new();
+        if prefix.starts_with("cache/") || prefix.starts_with("geoip/") {
+            let bucket = self.bucket()?;
+            let objects = bucket
+                .list()
+                .prefix(prefix.to_string())
+                .execute()
+                .await
+                .map_err(|e| anyhow::anyhow!("列举 R2 失败：{e}"))?;
+            for object in objects.objects() {
+                out.push(ObjectMeta {
+                    key: object.key(),
+                    size: object.size(),
+                    modified: None,
+                });
+            }
+            return Ok(out);
+        }
         let resp = self
             .do_request(
                 Method::Get,
@@ -170,7 +229,6 @@ impl Storage {
             )
             .await?;
         let text = String::from_utf8(resp).map_err(|_| anyhow::anyhow!("列表不是 UTF-8"))?;
-        let mut out: Vec<ObjectMeta> = Vec::new();
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -192,11 +250,10 @@ impl Storage {
     pub fn now(&self) -> DateTime<Utc> {
         Utc::now()
     }
+}
 
-    /// 供依赖 Env 的调用方（GeoIP 下载等）取回绑定。
-    pub fn env(&self) -> &Env {
-        &self.env
-    }
+fn is_r2_key(key: &str) -> bool {
+    key.starts_with("cache/") || (key.starts_with("geoip/") && key.ends_with(".mmdb"))
 }
 
 fn urlencode(input: &str) -> String {

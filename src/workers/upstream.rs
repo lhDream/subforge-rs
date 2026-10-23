@@ -34,6 +34,16 @@ fn header(resp: &worker::Response, name: &str) -> Option<String> {
 
 /// 拉取上游；`etag`/`last_modified` 用于条件请求。
 pub async fn fetch(url: &str, etag: Option<&str>, last_modified: Option<&str>) -> FetchResult {
+    let url = url.to_string();
+    let etag = etag.map(|s| s.to_string());
+    let last_modified = last_modified.map(|s| s.to_string());
+    worker::send::SendFuture::new(async move {
+        fetch_inner(&url, etag.as_deref(), last_modified.as_deref()).await
+    })
+    .await
+}
+
+async fn fetch_inner(url: &str, etag: Option<&str>, last_modified: Option<&str>) -> FetchResult {
     let headers = Headers::new();
     if let Err(e) = headers.set("User-Agent", USER_AGENT) {
         return FetchResult {

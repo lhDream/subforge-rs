@@ -18,6 +18,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use tower_http::services::ServeDir;
 
 // ---------------------------------------------------------------- 错误
@@ -509,7 +510,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(management)
         .route("/sub/{slug}", get(pages::subscribe))
         .route("/healthz", get(pages::healthz))
-        .nest_service("/static", static_assets(static_dir))
+        .merge(static_assets(static_dir))
         .with_state(state)
 }
 
@@ -517,10 +518,51 @@ pub fn router(state: Arc<AppState>) -> Router {
 ///
 /// 页面脚本/样式改动后，旧的 `app.js` 缓存会让「复制链接」这类新按钮**可见但无行为**。
 /// 这里不做 `no-store`，保留 304 复用，只强制重新验证。
-fn static_assets(dir: std::path::PathBuf) -> Router {
+#[cfg(not(target_arch = "wasm32"))]
+fn static_assets<S>(dir: std::path::PathBuf) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     Router::new()
-        .fallback_service(ServeDir::new(dir))
+        .nest_service("/static", ServeDir::new(dir))
         .layer(axum::middleware::from_fn(static_no_cache))
+}
+
+/// Workers 上没有文件系统：三个静态文件直接内嵌（约 59KB）。
+#[cfg(target_arch = "wasm32")]
+fn static_assets<S>(_dir: std::path::PathBuf) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/static/style.css",
+            get(|| async { embedded_asset("text/css", include_str!("../../static/style.css")) }),
+        )
+        .route(
+            "/static/ui-tokens.css",
+            get(|| async {
+                embedded_asset("text/css", include_str!("../../static/ui-tokens.css"))
+            }),
+        )
+        .route(
+            "/static/app.js",
+            get(|| async {
+                embedded_asset(
+                    "application/javascript",
+                    include_str!("../../static/app.js"),
+                )
+            }),
+        )
+        .layer(axum::middleware::from_fn(static_no_cache))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn embedded_asset(content_type: &'static str, body: &'static str) -> Response {
+    let mut resp = body.to_string().into_response();
+    resp.headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    resp
 }
 
 async fn static_no_cache(req: Request, next: Next) -> Response {
@@ -545,19 +587,21 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
     if trimmed.is_empty() {
         return Ok(String::new());
     }
-    let parsed = reqwest::Url::parse(trimmed).map_err(|e| format!("不是合法的 URL：{e}"))?;
-    match parsed.scheme() {
-        "http" | "https" => {}
-        scheme => {
-            return Err(format!(
-                "必须以 http:// 或 https:// 开头，当前是 {scheme}://"
-            ));
-        }
+    let Some((scheme, rest)) = trimmed.split_once("://") else {
+        return Err("必须以 http:// 或 https:// 开头".to_string());
+    };
+    if !matches!(scheme, "http" | "https") {
+        return Err(format!(
+            "必须以 http:// 或 https:// 开头，当前是 {scheme}://"
+        ));
     }
-    if !parsed.username().is_empty() || parsed.password().is_some() {
+    if rest.is_empty() || rest.contains(char::is_whitespace) {
+        return Err("URL 缺少主机名".to_string());
+    }
+    if rest.contains('@') {
         return Err("不要包含用户名或密码".to_string());
     }
-    if parsed.query().is_some() || parsed.fragment().is_some() {
+    if rest.contains('?') || rest.contains('#') {
         return Err("不要包含查询串或锚点".to_string());
     }
     Ok(trimmed.to_string())
