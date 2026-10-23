@@ -5,6 +5,8 @@
 //! - `GET /sub/{slug}`：导出 Clash YAML（Basic Auth 或方案令牌）；
 //! - `GET /admin/store`：导出当前 store YAML（Basic Auth，用于从 native 迁移/备份）；
 //! - `POST /admin/store`：导入 store YAML（Basic Auth，DO 单写者提交）；
+//! - `POST /admin/refresh-all`：手动刷新全部上游（Basic Auth）；
+//! - `GET /admin/r2`：R2 缓存对象诊断（Basic Auth）；
 //! - `GET /`：只读概览页。
 //!
 //! 存储：store 在 Durable Object「Core」里（单写者 + revision），上游缓存在 R2。
@@ -23,7 +25,7 @@ use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, Response as HttpResponse, StatusCode, header};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use tower::ServiceExt;
 use worker::send::SendFuture;
 use worker::{Context, Env, HttpRequest};
@@ -39,6 +41,8 @@ pub fn app(state: AppState) -> Router {
         .route("/healthz", get(healthz))
         .route("/sub/{slug}", get(subscribe))
         .route("/admin/store", get(admin_store_get).post(admin_store_post))
+        .route("/admin/r2", get(admin_r2))
+        .route("/admin/refresh-all", post(admin_refresh_all))
         .with_state(state)
 }
 
@@ -194,6 +198,101 @@ async fn admin_store_post(
                 StatusCode::BAD_REQUEST,
                 "text/plain; charset=utf-8",
                 format!("保存失败：{e}"),
+            ),
+        }
+    })
+    .await
+}
+
+// ---------------------------------------------------------------- 刷新
+
+/// 手动刷新全部上游（P3 的 Cron 之前，用它替代定时任务）。
+///
+/// 逐个刷新并把每个上游的最终缓存状态回报给调用方；单个失败不影响其余。
+async fn admin_refresh_all(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    SendFuture::new(async move {
+        if !crate::workers::auth::basic_ok(&state.env, &headers) {
+            return unauthorized();
+        }
+        let result: worker::Result<String> = async {
+            let store = crate::workers::store::load(&state.env).await?;
+            let mut lines = Vec::new();
+            for upstream in &store.upstreams {
+                let outcome = crate::workers::upstream::refresh(&state.env, &store, &upstream.id)
+                    .await
+                    .map_err(|e| format!("{e}"));
+                let status = match crate::workers::cache::load(&state.env, &upstream.id).await {
+                    Ok(Some(envelope)) => envelope.meta.status.label().to_string(),
+                    Ok(None) => "无缓存".to_string(),
+                    Err(e) => format!("读取失败：{e}"),
+                };
+                match outcome {
+                    Ok(()) => {
+                        lines.push(format!("{}（{}）：{}", upstream.name, upstream.id, status))
+                    }
+                    Err(e) => {
+                        lines.push(format!("{}（{}）：失败：{e}", upstream.name, upstream.id))
+                    }
+                }
+            }
+            if lines.is_empty() {
+                Ok("没有上游需要刷新".to_string())
+            } else {
+                Ok(format!("刷新完成：\n{}", lines.join("\n")))
+            }
+        }
+        .await;
+        match result {
+            Ok(body) => text(StatusCode::OK, "text/plain; charset=utf-8", body),
+            Err(e) => text(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "text/plain; charset=utf-8",
+                format!("刷新失败：{e}"),
+            ),
+        }
+    })
+    .await
+}
+
+// ---------------------------------------------------------------- R2 诊断
+
+/// 列出 `cache/` 前缀下的对象，并做一次 put→get 探针。
+///
+/// 仅管理认证可见；用于确认 Worker 视角的 R2 绑定与对象写入是否生效。
+async fn admin_r2(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    SendFuture::new(async move {
+        if !crate::workers::auth::basic_ok(&state.env, &headers) {
+            return unauthorized();
+        }
+        let result: worker::Result<String> = async {
+            let bucket = state.env.bucket("CACHE")?;
+            let listed = bucket.list().prefix("cache/").execute().await?;
+            let keys: Vec<String> = listed
+                .objects()
+                .iter()
+                .map(|o| format!("{} ({} B)", o.key(), o.size()))
+                .collect();
+            let probe_key = "debug/probe.txt";
+            bucket
+                .put(probe_key, "probe-ok".to_string())
+                .execute()
+                .await?;
+            let probe = match bucket.get(probe_key).execute().await? {
+                Some(object) => match object.body() {
+                    Some(body) => body.text().await?,
+                    None => "<no body>".to_string(),
+                },
+                None => "<missing>".to_string(),
+            };
+            Ok(format!("cache keys: {keys:?}\nprobe write/read: {probe}"))
+        }
+        .await;
+        match result {
+            Ok(body) => text(StatusCode::OK, "text/plain; charset=utf-8", body),
+            Err(e) => text(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "text/plain; charset=utf-8",
+                format!("R2 诊断失败：{e}"),
             ),
         }
     })

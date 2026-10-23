@@ -160,10 +160,48 @@ curl -u any:$SUBFORGE_PASSWORD http://127.0.0.1:8787/sub/<slug>
 首次导出会从 R2 读缓存；缺失时由 Worker Fetch 同步拉取一次并写回 R2，
 之后复用缓存（与 native 的「导出时缓存缺失才拉取」一致）。
 
+### 7.2 线上部署（已验证）
+
+测试实例（Cloudflare 账号 `luhuadream@gmail.com`）：
+
+```
+https://subforge-rs.luhuadream.workers.dev
+```
+
+部署步骤（`wrangler` 已登录后）：
+
+```bash
+# 1. R2 桶只需建一次
+npx wrangler r2 bucket create subforge-cache
+
+# 2. 管理密码（随机、只存 Cloudflare secret）
+npx wrangler secret put SUBFORGE_PASSWORD
+
+# 3. 部署（wrangler 会调用 worker-build --release）
+npx wrangler deploy
+
+# 4. 导入 native 的 store（含 token，命令不要贴到公开场合）
+curl -u any:<密码> --data-binary @data/store.yaml \
+  https://subforge-rs.<subdomain>.workers.dev/admin/store
+
+# 5. 手动刷新全部上游（Cron 落地前用它）
+curl -u any:<密码> -X POST \
+  https://subforge-rs.<subdomain>.workers.dev/admin/refresh-all
+```
+
+注意：`wrangler r2 object get/put` **默认操作本地模拟存储**，查看线上对象要加 `--remote`：
+
+```bash
+npx wrangler r2 object get subforge-cache/cache/<id>.yaml --remote --file out.yaml
+```
+
+管理端点在线上均要求 Basic Auth；`/healthz`、`/sub/{slug}`（Basic Auth 或方案令牌）按设计暴露。
+
 ## 8. 验证记录
 
 | 日期 | 阶段 | 结果 |
 | --- | --- | --- |
 | 2026-10-23 | P0 | `cargo test` **203 通过**；`cargo check`/`cargo build --lib --target wasm32-unknown-unknown` 通过；`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings` 通过（native）。wasm 产物 `subforge_rs.wasm`（debug）已生成。 |
 | 2026-10-23 | P1（MVP） | `worker-build --release` 产出 `build/index.js` + `build/index_bg.wasm`（约 2.5MB）；`wrangler dev 4.152.0` 本地启动成功（DO + R2 绑定）。实测：`/healthz` 公开 200；`/` 未认证 401、认证后 200；`POST /admin/store` 导入后 `revision=1`；`GET /sub/test` 返回 `text/yaml`，含 4 个节点、2 个分组、`MATCH` 规则。上游拉取使用本地 fixture 服务（避免请求真实机场），缓存写入 R2。 |
+| 2026-10-23 | P1 线上 | 部署到 `https://subforge-rs.luhuadream.workers.dev`（Worker Startup 7ms；上传 2.5MB / gzip 856KB）。实测：`/healthz` 200、`/` 401/200；导入 store `revision=2`；`/sub/test` 200 `text/yaml`；上游 `https://example.com/` 解析失败按 §4.4 降级（`x-subforge-warnings` 可见），R2 写入 `cache/r2test.yaml`（587B，`--remote` 读取确认）；`POST /admin/refresh-all` 返回各上游状态。测试数据不含真实订阅 token。 |
 | 2026-10-23 | 工具链 | Rust 从 1.88 升到 **1.99.1**（worker 0.8.7 要求 1.91+）；升级后 clippy 新增的 15 条 lint 已修复。`worker-build 0.8.7` 已安装。 |
