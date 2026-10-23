@@ -129,7 +129,8 @@ pub async fn run() -> Result<()> {
 
     let cfg = boot.config.clone();
 
-    let store = store::StoreHandle::new(&boot.data_dir)?;
+    let storage = Arc::new(crate::storage::Storage::new(boot.data_dir.clone()));
+    let store = store::StoreHandle::open(storage).await?;
     {
         let snapshot = store.snapshot().await;
         tracing::info!(
@@ -174,7 +175,7 @@ pub async fn run() -> Result<()> {
         cfg.fetch_concurrency,
         startup_proxy.as_deref(),
     )?);
-    let geo = Arc::new(geoip::GeoResolver::load(&store.geoip_dir())?);
+    let geo = Arc::new(geoip::GeoResolver::load(&boot.data_dir.join("geoip"))?);
     let geoip_updater = Arc::new(geoip_update::GeoipUpdater::with_proxy(
         store.clone(),
         geo.clone(),

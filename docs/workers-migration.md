@@ -150,11 +150,11 @@ Windows 上跑测试时还需把 `TEMP`/`TMP` 指到工作区内（`target/test-
 cp data/store.yaml target/import.yaml
 
 # 校验/导入（DO 会迁移 + 结构校验 + revision 递增）
-curl -u any:$SUBFORGE_PASSWORD --data-binary @target/import.yaml \
+curl -u admin:$SUBFORGE_PASSWORD --data-binary @target/import.yaml \
   http://127.0.0.1:8787/admin/store
 
 # 订阅导出
-curl -u any:$SUBFORGE_PASSWORD http://127.0.0.1:8787/sub/<slug>
+curl -u admin:$SUBFORGE_PASSWORD http://127.0.0.1:8787/sub/<slug>
 ```
 
 首次导出会从 R2 读缓存；缺失时由 Worker Fetch 同步拉取一次并写回 R2，
@@ -181,11 +181,11 @@ npx wrangler secret put SUBFORGE_PASSWORD
 npx wrangler deploy
 
 # 4. 导入 native 的 store（含 token，命令不要贴到公开场合）
-curl -u any:<密码> --data-binary @data/store.yaml \
+curl -u admin:<密码> --data-binary @data/store.yaml \
   https://subforge-rs.<subdomain>.workers.dev/admin/store
 
 # 5. 手动刷新全部上游（Cron 落地前用它）
-curl -u any:<密码> -X POST \
+curl -u admin:<密码> -X POST \
   https://subforge-rs.<subdomain>.workers.dev/admin/refresh-all
 ```
 

@@ -8,7 +8,7 @@ impl Refresher {
             .upstream(id)
             .ok_or_else(|| anyhow::anyhow!("上游不存在"))?;
         let url = upstream.url.clone();
-        let initial = cache::load(&self.store.cache_dir(), id)?;
+        let initial = cache::load(&self.store.storage(), id).await?;
         let expected = cache::fingerprint(initial.as_ref())?;
         let mut env = initial.ok_or_else(|| anyhow::anyhow!("上游没有缓存"))?;
         let fetcher = self.fetcher.read().await.clone();
@@ -50,19 +50,17 @@ impl Refresher {
         );
         env.meta.forced_at = Some(Utc::now());
         let _guard = self.cache_commits.lock().await;
-        self.store
-            .with_current(|current| {
-                if current.revision != snapshot.revision
-                    || current.upstream(id).is_none_or(|u| u.url != url)
-                {
-                    anyhow::bail!("上游已被修改或删除，本次结果已丢弃");
-                }
-                let current_env = cache::load(&self.store.cache_dir(), id)?;
-                if cache::fingerprint(current_env.as_ref())? != expected {
-                    anyhow::bail!("缓存已被其他操作修改，本次结果已丢弃");
-                }
-                cache::save(&self.store.cache_dir(), id, &env)
-            })
-            .await
+        let storage = self.store.storage();
+        let current = self.store.snapshot().await;
+        if current.revision != snapshot.revision
+            || current.upstream(id).is_none_or(|u| u.url != url)
+        {
+            anyhow::bail!("上游已被修改或删除，本次结果已丢弃");
+        }
+        let current_env = cache::load(&storage, id).await?;
+        if cache::fingerprint(current_env.as_ref())? != expected {
+            anyhow::bail!("缓存已被其他操作修改，本次结果已丢弃");
+        }
+        cache::save(&storage, id, &env).await
     }
 }

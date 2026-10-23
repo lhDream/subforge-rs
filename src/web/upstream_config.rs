@@ -117,7 +117,7 @@ async fn page_inner(
         return Err(anyhow::anyhow!("上游「{id}」不存在").into());
     };
     let revision = revision_override.unwrap_or(snapshot.revision);
-    let loaded = cache::load(&state.store.cache_dir(), &id);
+    let loaded = cache::load(&state.store.storage(), &id).await;
     let (env, cache_error) = match loaded {
         Ok(env) => (env, String::new()),
         Err(_) => (
@@ -200,7 +200,8 @@ async fn save_inner(
     let submitted_revision = form.get_u64("revision");
     let expected_fingerprint = form.get("fingerprint").unwrap_or("").to_string();
     let entered_body = form.get("body").unwrap_or("").to_string();
-    let current_env = cache::load(&state.store.cache_dir(), &id)
+    let current_env = cache::load(&state.store.storage(), &id)
+        .await
         .map_err(|_| anyhow::anyhow!("缓存文件损坏或无法读取，请先修复缓存文件后重试"))?;
     let current_fingerprint = crate::cache::fingerprint(current_env.as_ref())?;
     let mut field = "body";
@@ -262,7 +263,8 @@ mod tests {
 
     async fn test_state() -> Arc<AppState> {
         let dir = std::env::temp_dir().join(format!("subforge-web-{}", crate::auth::random_hex(8)));
-        let store = crate::store::StoreHandle::new(&dir).unwrap();
+        let storage = std::sync::Arc::new(crate::storage::Storage::new(dir.clone()));
+        let store = crate::store::StoreHandle::open(storage).await.unwrap();
         store
             .update(None, |s| {
                 s.upstreams.push(crate::store::model::Upstream {
@@ -275,7 +277,7 @@ mod tests {
             })
             .await
             .unwrap();
-        let geo = Arc::new(crate::geoip::GeoResolver::load(&store.geoip_dir()).unwrap());
+        let geo = Arc::new(crate::geoip::GeoResolver::load(&dir.join("geoip")).unwrap());
         Arc::new(AppState {
             cfg: crate::config::Config::default(),
             refresher: Arc::new(
@@ -325,7 +327,8 @@ mod tests {
         let html = response_text(response).await;
         assert!(html.contains("可以直接粘贴 Clash YAML"));
         assert!(
-            cache::load(&state.store.cache_dir(), "test")
+            cache::load(&state.store.storage(), "test")
+                .await
                 .unwrap()
                 .is_none()
         );
@@ -346,7 +349,8 @@ mod tests {
             "/upstreams/test/config?saved=1"
         );
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
-        let env = cache::load(&state.store.cache_dir(), "test")
+        let env = cache::load(&state.store.storage(), "test")
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(env.body, body);
@@ -388,7 +392,8 @@ mod tests {
         );
         assert!(html.contains(&format!("name=\"fingerprint\" value=\"{fp}\"")));
         assert!(
-            cache::load(&state.store.cache_dir(), "test")
+            cache::load(&state.store.storage(), "test")
+                .await
                 .unwrap()
                 .is_none()
         );
@@ -409,7 +414,8 @@ mod tests {
         assert!(html.contains("缓存已被其他操作修改"));
         assert!(html.contains(&format!("name=\"fingerprint\" value=\"{fp}\"")));
         assert_eq!(
-            cache::load(&state.store.cache_dir(), "test")
+            cache::load(&state.store.storage(), "test")
+                .await
                 .unwrap()
                 .unwrap()
                 .body,

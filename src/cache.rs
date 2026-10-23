@@ -9,11 +9,10 @@
 //! - **状态字段**（`last_attempt_at` / `last_error` / `last_error_kind` / `status`）
 //!   每次刷新都更新。
 
-use crate::store::atomic_write;
+use crate::storage::Storage;
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -198,37 +197,43 @@ pub fn fingerprint(env: Option<&CacheEnvelope>) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serialized.as_bytes())))
 }
 
-pub fn cache_path(dir: &Path, id: &str) -> Result<PathBuf> {
+/// 缓存对象 key：`cache/<id>.yaml`。
+pub fn key(id: &str) -> Result<String> {
     if !crate::store::valid_slug(id) {
         bail!("非法的上游 id：{id}");
     }
-    Ok(dir.join(format!("{id}.yaml")))
+    Ok(format!("cache/{id}.yaml"))
 }
 
-pub fn load(dir: &Path, id: &str) -> Result<Option<CacheEnvelope>> {
-    let path = cache_path(dir, id)?;
-    if !path.exists() {
+pub async fn load(storage: &Storage, id: &str) -> Result<Option<CacheEnvelope>> {
+    let key = key(id)?;
+    let Some(text) = storage
+        .get_string(&key)
+        .await
+        .with_context(|| format!("读取缓存失败：{key}"))?
+    else {
         return Ok(None);
-    }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("读取缓存失败：{}", path.display()))?;
-    let env: CacheEnvelope = serde_yaml_ng::from_str(&text)
-        .with_context(|| format!("解析缓存失败：{}", path.display()))?;
+    };
+    let env: CacheEnvelope =
+        serde_yaml_ng::from_str(&text).with_context(|| format!("解析缓存失败：{key}"))?;
     Ok(Some(env))
 }
 
-pub fn save(dir: &Path, id: &str, env: &CacheEnvelope) -> Result<()> {
-    let path = cache_path(dir, id)?;
+pub async fn save(storage: &Storage, id: &str, env: &CacheEnvelope) -> Result<()> {
+    let key = key(id)?;
     let text = serde_yaml_ng::to_string(env)?;
-    atomic_write(&path, &text)
+    storage
+        .put_string(&key, &text)
+        .await
+        .with_context(|| format!("写入缓存失败：{key}"))
 }
 
-pub fn remove(dir: &Path, id: &str) -> Result<()> {
-    let path = cache_path(dir, id)?;
-    if path.exists() {
-        std::fs::remove_file(&path).with_context(|| format!("删除缓存失败：{}", path.display()))?;
-    }
-    Ok(())
+pub async fn remove(storage: &Storage, id: &str) -> Result<()> {
+    let key = key(id)?;
+    storage
+        .delete(&key)
+        .await
+        .with_context(|| format!("删除缓存失败：{key}"))
 }
 
 #[cfg(test)]
@@ -369,7 +374,8 @@ mod tests {
     }
 
     #[test]
-    fn cache_path_rejects_traversal() {
-        assert!(cache_path(Path::new("."), "../evil").is_err());
+    fn cache_key_rejects_traversal() {
+        assert!(key("../evil").is_err());
+        assert_eq!(key("ok-id").unwrap(), "cache/ok-id.yaml");
     }
 }

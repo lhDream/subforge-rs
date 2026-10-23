@@ -9,11 +9,12 @@ pub mod model;
 
 pub use model::*;
 
+use crate::storage::Storage;
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -30,7 +31,8 @@ pub fn valid_slug(s: &str) -> bool {
 
 #[derive(Debug, Clone)]
 pub struct BackupInfo {
-    pub path: PathBuf,
+    /// 备份对象名（`store.<ts>.yaml`），同时用作存储 key 的最后一段。
+    pub name: String,
     pub created_at: String,
     pub size: u64,
 }
@@ -150,67 +152,62 @@ pub struct StoreHandle {
 }
 
 struct Inner {
-    data_dir: PathBuf,
+    storage: Arc<Storage>,
     state: RwLock<Arc<Store>>,
 }
 
 impl StoreHandle {
-    /// 打开（或首次初始化）数据目录。
-    pub fn new(data_dir: impl Into<PathBuf>) -> Result<Self> {
-        let data_dir = data_dir.into();
-        for d in [
-            data_dir.clone(),
-            data_dir.join("cache"),
-            data_dir.join("cache").join("rendered"),
-            data_dir.join("geoip"),
-            data_dir.join("backups"),
-        ] {
-            std::fs::create_dir_all(&d)
-                .with_context(|| format!("创建目录失败：{}", d.display()))?;
-        }
-
-        let store_path = data_dir.join("store.yaml");
-        let store = if store_path.exists() {
-            let text = std::fs::read_to_string(&store_path)
-                .with_context(|| format!("读取失败：{}", store_path.display()))?;
-            warn_removed_apps(&text, &store_path);
-            let parsed: Store = serde_yaml_ng::from_str(&text)
-                .with_context(|| format!("解析失败：{}", store_path.display()))?;
-            let parsed = migrate::migrate(parsed)?;
-            crate::validate::validate_structure(&parsed)
-                .with_context(|| format!("数据校验失败：{}", store_path.display()))?;
-            parsed
-        } else {
-            let fresh = Store::default();
-            atomic_write(&store_path, &serde_yaml_ng::to_string(&fresh)?)?;
-            tracing::info!("已初始化数据文件 {}", store_path.display());
-            fresh
+    /// 打开（或首次初始化）业务数据。native 传 `data/` 目录的 Storage，
+    /// Workers 传 DO/R2 后端的 Storage；两者语义一致。
+    pub async fn open(storage: Arc<Storage>) -> Result<Self> {
+        storage.ensure_dirs()?;
+        let store = match storage.get_string("store.yaml").await? {
+            Some(text) => {
+                warn_removed_apps(&text, "store.yaml");
+                let parsed: Store =
+                    serde_yaml_ng::from_str(&text).context("解析 store.yaml 失败")?;
+                let parsed = migrate::migrate(parsed)?;
+                crate::validate::validate_structure(&parsed).context("数据校验失败：store.yaml")?;
+                parsed
+            }
+            None => {
+                let fresh = Store::default();
+                storage
+                    .put_string("store.yaml", &serde_yaml_ng::to_string(&fresh)?)
+                    .await?;
+                tracing::info!("已初始化数据文件 store.yaml");
+                fresh
+            }
         };
 
         Ok(Self {
             inner: Arc::new(Inner {
-                data_dir,
+                storage,
                 state: RwLock::new(Arc::new(store)),
             }),
         })
     }
 
-    // ---------------------------------------------------------- 路径
+    /// 使用已有快照构造（Workers 侧从 DO 读 YAML 后直接给）。
+    pub fn from_store(storage: Arc<Storage>, store: Store) -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                storage,
+                state: RwLock::new(Arc::new(store)),
+            }),
+        }
+    }
 
-    pub fn store_path(&self) -> PathBuf {
-        self.inner.data_dir.join("store.yaml")
+    // ---------------------------------------------------------- 存储
+
+    pub fn storage(&self) -> Arc<Storage> {
+        self.inner.storage.clone()
     }
-    pub fn cache_dir(&self) -> PathBuf {
-        self.inner.data_dir.join("cache")
-    }
-    pub fn rendered_dir(&self) -> PathBuf {
-        self.inner.data_dir.join("cache").join("rendered")
-    }
-    pub fn geoip_dir(&self) -> PathBuf {
-        self.inner.data_dir.join("geoip")
-    }
-    pub fn backups_dir(&self) -> PathBuf {
-        self.inner.data_dir.join("backups")
+
+    /// native 专用：数据目录根（GeoIP 等仍按目录访问的组件使用）。
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn data_dir(&self) -> &std::path::Path {
+        self.inner.storage.root()
     }
 
     // ---------------------------------------------------------- 读
@@ -233,11 +230,12 @@ impl StoreHandle {
 
     // ---------------------------------------------------------- 写
 
-    /// 在写锁内完成「读快照 → 计算新状态 → 校验 → 原子写盘 → 替换快照」。
+    /// 在写锁内完成「读快照 → 计算新状态 → 校验 → 原子提交 → 替换快照」。
     ///
     /// `expected_revision` 非空时做乐观并发校验，防止丢失更新（§8.2）。
     ///
-    /// 注：文件很小（单人自用），此处使用同步文件 IO；锁内不做任何网络请求。
+    /// 注：native 是本地文件写入；Workers 上 `Storage::put` 会经 DO 串行化，
+    /// 两者都保证「一次 put = 一次提交」，因此锁内不做其他网络请求。
     pub async fn update<T>(
         &self,
         expected_revision: Option<u64>,
@@ -264,8 +262,12 @@ impl StoreHandle {
         draft.revision = current.revision.saturating_add(1);
         let text = serde_yaml_ng::to_string(&draft).context("序列化数据失败")?;
 
-        self.backup_current()?;
-        atomic_write(&self.store_path(), &text)?;
+        self.backup_current().await?;
+        self.inner
+            .storage
+            .put_string("store.yaml", &text)
+            .await
+            .context("写入 store.yaml 失败")?;
 
         let rev = draft.revision;
         *guard = Arc::new(draft);
@@ -273,79 +275,80 @@ impl StoreHandle {
     }
 
     /// 备份当前 store.yaml（若存在），并裁剪历史。
-    fn backup_current(&self) -> Result<()> {
-        let store_path = self.store_path();
-        if !store_path.exists() {
+    async fn backup_current(&self) -> Result<()> {
+        let Some(current) = self.inner.storage.get_string("store.yaml").await? else {
             return Ok(());
-        }
+        };
         let ts = Utc::now().format("%Y%m%d-%H%M%S-%3f");
-        let dest = self.backups_dir().join(format!("store.{ts}.yaml"));
-        std::fs::copy(&store_path, &dest)
-            .with_context(|| format!("备份失败：{}", dest.display()))?;
-        self.prune_backups()?;
+        let key = format!("backups/store.{ts}.yaml");
+        self.inner
+            .storage
+            .put_string(&key, &current)
+            .await
+            .with_context(|| format!("备份失败：{key}"))?;
+        self.prune_backups().await?;
         Ok(())
     }
 
-    fn prune_backups(&self) -> Result<()> {
-        let mut backups = self.list_backups()?;
+    async fn prune_backups(&self) -> Result<()> {
+        let mut backups = self.list_backups().await?;
         if backups.len() <= MAX_BACKUPS {
             return Ok(());
         }
         // 文件名含可排序时间戳，升序即最旧在前。
-        backups.sort_by(|a, b| a.path.cmp(&b.path));
+        backups.sort_by(|a, b| a.name.cmp(&b.name));
         let remove_count = backups.len() - MAX_BACKUPS;
         for b in backups.into_iter().take(remove_count) {
-            let _ = std::fs::remove_file(&b.path);
+            let _ = self
+                .inner
+                .storage
+                .delete(&format!("backups/{}", b.name))
+                .await;
         }
         Ok(())
     }
 
-    pub fn list_backups(&self) -> Result<Vec<BackupInfo>> {
-        let dir = self.backups_dir();
+    pub async fn list_backups(&self) -> Result<Vec<BackupInfo>> {
+        let objects = self.inner.storage.list("backups/").await?;
         let mut out = Vec::new();
-        if !dir.exists() {
-            return Ok(out);
-        }
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        for object in objects {
+            let name = object.key.rsplit('/').next().unwrap_or("").to_string();
             if !name.starts_with("store.") || !name.ends_with(".yaml") {
                 continue;
             }
-            let meta = entry.metadata()?;
             let created_at = name
                 .trim_start_matches("store.")
                 .trim_end_matches(".yaml")
                 .to_string();
             out.push(BackupInfo {
-                path,
+                name,
                 created_at,
-                size: meta.len(),
+                size: object.size,
             });
         }
-        out.sort_by(|a, b| b.path.cmp(&a.path)); // 最新在前
+        out.sort_by(|a, b| b.name.cmp(&a.name)); // 最新在前
         Ok(out)
     }
 
-    pub fn read_backup(&self, path: &Path) -> Result<Store> {
-        // 只允许读取 backups 目录下的文件，避免路径穿越。
-        let canonical_dir = self.backups_dir().canonicalize()?;
-        let canonical = path.canonicalize()?;
-        if !canonical.starts_with(&canonical_dir) {
-            bail!("非法的备份路径");
+    /// `name` 是 [`BackupInfo::name`]（`store.<ts>.yaml`），不接受任意路径。
+    pub async fn read_backup(&self, name: &str) -> Result<Store> {
+        if name.contains('/') || name.contains('\\') || !name.starts_with("store.") {
+            bail!("非法的备份名");
         }
-        let text = std::fs::read_to_string(&canonical)?;
+        let key = format!("backups/{name}");
+        let text = self
+            .inner
+            .storage
+            .get_string(&key)
+            .await?
+            .with_context(|| format!("备份不存在：{name}"))?;
         let store: Store = serde_yaml_ng::from_str(&text)?;
         migrate::migrate(store)
     }
 
     /// 从备份恢复。恢复前会先备份当前状态（`update` 内部完成）。
-    pub async fn restore(&self, path: &Path, expected_revision: Option<u64>) -> Result<u64> {
-        let restored = self.read_backup(path)?;
+    pub async fn restore(&self, name: &str, expected_revision: Option<u64>) -> Result<u64> {
+        let restored = self.read_backup(name).await?;
         let (_, rev) = self
             .update(expected_revision, |draft| {
                 let rev = draft.revision;
@@ -362,7 +365,7 @@ impl StoreHandle {
 ///
 /// serde 默认忽略未知字段，应用定义会**悄无声息**地消失。这里显式告警，
 /// 让用户知道要去「路由规则」页把它们的域名规则补回来。
-fn warn_removed_apps(text: &str, path: &Path) {
+fn warn_removed_apps(text: &str, name: &str) {
     let count = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(text)
         .ok()
         .and_then(|v| {
@@ -374,8 +377,7 @@ fn warn_removed_apps(text: &str, path: &Path) {
         .unwrap_or(0);
     if count > 0 {
         tracing::warn!(
-            "{} 里还有 {count} 个「应用」定义，但应用模块已被移除，这些定义会被忽略；请把它们的域名规则改到「路由规则」页维护",
-            path.display()
+            "{name} 里还有 {count} 个「应用」定义，但应用模块已被移除，这些定义会被忽略；请把它们的域名规则改到「路由规则」页维护"
         );
     }
 }

@@ -102,7 +102,7 @@ impl GeoipUpdater {
         geo: Arc<GeoResolver>,
         proxy: Option<&str>,
     ) -> Result<Self> {
-        let status_path = store.geoip_dir().join(STATUS_FILE);
+        let status_path = store.data_dir().join("geoip").join(STATUS_FILE);
         let status = load_status(&status_path);
         let builder = reqwest::Client::builder()
             .user_agent(format!(
@@ -199,7 +199,7 @@ impl GeoipUpdater {
                     let processed = (|| -> Result<GeoDbInfo> {
                         let payload = decode_payload(&bytes)?;
                         geoip::inspect_mmdb(&payload)?;
-                        let path = self.store.geoip_dir().join(AUTO_DB_FILE);
+                        let path = self.store.data_dir().join("geoip").join(AUTO_DB_FILE);
                         self.geo.install_bytes(payload, &path)
                     })();
 

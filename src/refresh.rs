@@ -82,14 +82,14 @@ impl Refresher {
             .iter()
             .map(|u| (u.id.clone(), u.name.clone()))
             .collect();
-        let cache_dir = self.store.cache_dir();
+        let storage = self.store.storage();
         drop(snapshot);
 
         let now = Utc::now();
         let total = upstreams.len();
         let mut ids = Vec::new();
         for (id, name) in upstreams {
-            let due = match cache::load(&cache_dir, &id) {
+            let due = match cache::load(&storage, &id).await {
                 Ok(Some(env)) => is_due(&env, now, interval),
                 Ok(None) => true,
                 Err(e) => {
@@ -177,7 +177,7 @@ impl Refresher {
         let filter_enabled = snapshot.settings.filter_enabled;
         drop(snapshot);
 
-        let loaded_env = match cache::load(&self.store.cache_dir(), id) {
+        let loaded_env = match cache::load(&self.store.storage(), id).await {
             Ok(Some(e)) => Some(e),
             Ok(None) => None,
             Err(e) => {
@@ -348,7 +348,8 @@ impl Refresher {
                 discarded: true,
             };
         }
-        let current_fingerprint = cache::load(&self.store.cache_dir(), id)
+        let current_fingerprint = cache::load(&self.store.storage(), id)
+            .await
             .ok()
             .and_then(|env| cache::fingerprint(env.as_ref()).ok());
         if current_fingerprint.as_deref() != initial_fingerprint {
@@ -360,7 +361,7 @@ impl Refresher {
                 discarded: true,
             };
         }
-        if let Err(e) = cache::save(&self.store.cache_dir(), id, &env) {
+        if let Err(e) = cache::save(&self.store.storage(), id, &env).await {
             return RefreshOutcome {
                 upstream_id: id.to_string(),
                 status: CacheStatus::Failed,
@@ -398,7 +399,8 @@ impl Refresher {
                 discarded: true,
             };
         }
-        let current_fingerprint = cache::load(&self.store.cache_dir(), id)
+        let current_fingerprint = cache::load(&self.store.storage(), id)
+            .await
             .ok()
             .and_then(|env| cache::fingerprint(env.as_ref()).ok());
         if current_fingerprint.as_deref() != initial_fingerprint {
@@ -411,7 +413,7 @@ impl Refresher {
             };
         }
         // 状态字段仍要落盘（内容字段由 commit_failure 保证未动）
-        if let Err(e) = cache::save(&self.store.cache_dir(), id, &env) {
+        if let Err(e) = cache::save(&self.store.storage(), id, &env).await {
             tracing::warn!("写入上游 {id} 的缓存状态失败：{e}");
         }
         RefreshOutcome {
@@ -468,14 +470,14 @@ impl Refresher {
         if current_upstream.url != upstream_url {
             anyhow::bail!("上游地址已被修改，请刷新页面后重试");
         }
-        let current = cache::load(&self.store.cache_dir(), id)?;
+        let current = cache::load(&self.store.storage(), id).await?;
         let actual = cache::fingerprint(current.as_ref())?;
         if actual != expected_fingerprint {
             anyhow::bail!("缓存已被其他操作修改，请刷新页面后重试");
         }
         let mut env = current.unwrap_or_default();
         env.commit_manual(body, &parsed, Utc::now());
-        cache::save(&self.store.cache_dir(), id, &env)
+        cache::save(&self.store.storage(), id, &env).await
     }
 
     /// 启动定期刷新后台任务。

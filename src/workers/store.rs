@@ -12,8 +12,11 @@ pub const BINDING: &str = "CORE";
 /// 单实例名：单人自用，全站共享一个 Core。
 pub const INSTANCE: &str = "singleton";
 
-const CURRENT: &str = "store:current";
+/// 与 `storage` 抽象共用同一个 key，native 的 `data/store.yaml` 与 Workers 的
+/// DO 对象因此可以走同一套 `StoreHandle`。
+const CURRENT: &str = "store.yaml";
 const PREVIOUS: &str = "store:previous";
+const INDEX_KEY: &str = "_keys";
 
 fn werr(context: &str, e: impl std::fmt::Display) -> Error {
     Error::RustError(format!("{context}：{e}"))
@@ -91,6 +94,47 @@ impl DurableObject for Core {
                 let revision = self.import(&body).await?;
                 Response::ok(revision.to_string())
             }
+            // 通用对象存储：store/备份/status/last_good 等小对象都走这里，
+            // 由单写者 DO 串行化（对应 native 的写锁语义）。
+            (Method::Get, path) if path.starts_with("/obj/") => {
+                let key = &path["/obj/".len()..];
+                match self.state.storage().get::<String>(key).await? {
+                    Some(text) => Response::ok(text),
+                    None => Response::error("not found", 404),
+                }
+            }
+            (Method::Post, path) if path.starts_with("/obj/") => {
+                let key = &path["/obj/".len()..];
+                let body = req.text().await?;
+                let size = body.len() as u64;
+                self.state.storage().put(key, &body).await?;
+                self.index_put(key, size).await?;
+                Response::ok("ok")
+            }
+            (Method::Delete, path) if path.starts_with("/obj/") => {
+                let key = &path["/obj/".len()..];
+                let deleted = self.state.storage().delete(key).await?;
+                self.index_remove(key).await?;
+                if deleted {
+                    Response::ok("ok")
+                } else {
+                    Response::error("not found", 404)
+                }
+            }
+            (Method::Get, path) if path.starts_with("/list") => {
+                let prefix = path
+                    .split_once("prefix=")
+                    .map(|(_, p)| urldecode(p))
+                    .unwrap_or_default();
+                let entries = self.index().await?;
+                let mut out = String::new();
+                for (key, size) in entries {
+                    if key.starts_with(&prefix) {
+                        out.push_str(&format!("{key}\t{size}\n"));
+                    }
+                }
+                Response::ok(out)
+            }
             _ => Response::error("not found", 404),
         }
     }
@@ -130,4 +174,65 @@ impl Core {
         self.state.storage().put(CURRENT, text).await?;
         Ok(next.revision)
     }
+
+    // ---------------------------------------------------------- 对象索引
+
+    async fn index(&self) -> Result<Vec<(String, u64)>> {
+        let text = self
+            .state
+            .storage()
+            .get::<String>(INDEX_KEY)
+            .await?
+            .unwrap_or_default();
+        let mut out = Vec::new();
+        for line in text.lines() {
+            if let Some((key, size)) = line.rsplit_once('\t') {
+                out.push((key.to_string(), size.parse().unwrap_or(0)));
+            }
+        }
+        Ok(out)
+    }
+
+    async fn index_write(&self, list: &[(String, u64)]) -> Result<()> {
+        let text = list
+            .iter()
+            .map(|(key, size)| format!("{key}\t{size}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        self.state.storage().put(INDEX_KEY, text).await?;
+        Ok(())
+    }
+
+    async fn index_put(&self, key: &str, size: u64) -> Result<()> {
+        let mut list = self.index().await?;
+        list.retain(|(existing, _)| existing != key);
+        list.push((key.to_string(), size));
+        self.index_write(&list).await
+    }
+
+    async fn index_remove(&self, key: &str) -> Result<()> {
+        let mut list = self.index().await?;
+        list.retain(|(existing, _)| existing != key);
+        self.index_write(&list).await
+    }
+}
+
+/// `%XX` 解码（只处理 `/list?prefix=` 需要的最小集合）。
+fn urldecode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
 }

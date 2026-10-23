@@ -30,7 +30,13 @@ fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
-/// 校验 HTTP Basic Auth。用户名不限制，密码必须匹配。
+/// 管理账户用户名。
+///
+/// 固定为 `admin`，不开放配置：单人自用场景下用户名不是秘密，也不是安全边界；
+/// 真正的凭据只有密码（见 AGENTS.md §7）。大小写敏感。
+pub const ADMIN_USER: &str = "admin";
+
+/// 校验 HTTP Basic Auth：**用户名必须等于 [`ADMIN_USER`]，密码必须匹配**。
 pub fn basic_auth_ok(headers: &HeaderMap, password: &str) -> bool {
     let Some(value) = headers.get(header::AUTHORIZATION) else {
         return false;
@@ -50,10 +56,13 @@ pub fn basic_auth_ok(headers: &HeaderMap, password: &str) -> bool {
     let Ok(decoded) = String::from_utf8(raw) else {
         return false;
     };
-    let Some((_user, pass)) = decoded.split_once(':') else {
+    let Some((user, pass)) = decoded.split_once(':') else {
         return false;
     };
-    ct_eq(pass.as_bytes(), password.as_bytes())
+    // 用位与而非短路：两个比较都是恒定时间，避免「用户名对不对」影响返回耗时。
+    let user_ok = ct_eq(user.as_bytes(), ADMIN_USER.as_bytes());
+    let pass_ok = ct_eq(pass.as_bytes(), password.as_bytes());
+    user_ok & pass_ok
 }
 
 /// 读取指定 cookie。
@@ -142,6 +151,29 @@ mod tests {
         let h = headers_with(header::AUTHORIZATION, "Basic YWRtaW46c2VjcmV0");
         assert!(basic_auth_ok(&h, "secret"));
         assert!(!basic_auth_ok(&h, "wrong"));
+    }
+
+    fn basic_header(credentials: &str) -> HeaderMap {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+        headers_with(header::AUTHORIZATION, &format!("Basic {encoded}"))
+    }
+
+    #[test]
+    fn requires_admin_username() {
+        // 用户名 + 密码都对
+        assert!(basic_auth_ok(&basic_header("admin:secret"), "secret"));
+        // 用户名错、密码对 → 必须拒绝
+        assert!(!basic_auth_ok(&basic_header("root:secret"), "secret"));
+        assert!(!basic_auth_ok(
+            &basic_header("administrator:secret"),
+            "secret"
+        ));
+        // 大小写敏感
+        assert!(!basic_auth_ok(&basic_header("Admin:secret"), "secret"));
+        // 空用户名
+        assert!(!basic_auth_ok(&basic_header(":secret"), "secret"));
+        // 用户名对、密码错
+        assert!(!basic_auth_ok(&basic_header("admin:wrong"), "secret"));
     }
 
     #[test]

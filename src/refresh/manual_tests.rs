@@ -2,7 +2,8 @@ use super::*;
 
 async fn setup() -> (StoreHandle, Refresher) {
     let dir = std::env::temp_dir().join(format!("subforge-manual-{}", crate::auth::random_hex(8)));
-    let store = StoreHandle::new(dir).unwrap();
+    let storage = std::sync::Arc::new(crate::storage::Storage::new(dir));
+    let store = StoreHandle::open(storage).await.unwrap();
     store
         .update(None, |s| {
             s.upstreams.push(crate::store::model::Upstream {
@@ -29,7 +30,7 @@ async fn manual_content_is_raw_and_stale_success_or_failure_cannot_replace_it() 
         .save_manual("a", store.snapshot().await.revision, &fp, BODY.into())
         .await
         .unwrap();
-    let saved = cache::load(&store.cache_dir(), "a").unwrap().unwrap();
+    let saved = cache::load(&store.storage(), "a").await.unwrap().unwrap();
     assert_eq!(saved.body, BODY);
     assert!(saved.meta.manual_saved_at.is_some());
     let old = CacheEnvelope::default();
@@ -56,7 +57,11 @@ async fn manual_content_is_raw_and_stale_success_or_failure_cannot_replace_it() 
         .await;
     assert!(failure.discarded);
     assert_eq!(
-        cache::load(&store.cache_dir(), "a").unwrap().unwrap().body,
+        cache::load(&store.storage(), "a")
+            .await
+            .unwrap()
+            .unwrap()
+            .body,
         BODY
     );
     assert!(
@@ -77,7 +82,7 @@ async fn invalid_manual_input_never_replaces_current_content() {
             .await
             .unwrap_err();
         assert!(!error.to_string().contains("secret-not-yaml"));
-        assert!(cache::load(&store.cache_dir(), "a").unwrap().is_none());
+        assert!(cache::load(&store.storage(), "a").await.unwrap().is_none());
     }
 }
 

@@ -15,7 +15,7 @@ cargo run -- config.toml
 
 也可以不创建 `config.toml`：首次运行会自动生成配置和随机密码，并只在控制台打印一次。
 
-打开 http://127.0.0.1:8080/ ，用 Basic Auth 登录（用户名任意，密码是 `config.toml` 里的 `password`）。
+打开 http://127.0.0.1:8080/ ，用 Basic Auth 登录（用户名固定为 `admin`，密码是 `config.toml` 里的 `password`）。
 
 首次进入后：
 

@@ -21,6 +21,7 @@ pub mod links;
 pub mod region;
 pub mod render;
 pub mod rules;
+pub mod storage;
 pub mod store;
 pub mod subinfo;
 pub mod validate;

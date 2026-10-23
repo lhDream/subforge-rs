@@ -65,7 +65,7 @@ impl AppState {
         let Some(profile) = snapshot.profile(slug).cloned() else {
             bail!("方案「{slug}」不存在");
         };
-        let signature = self.render_signature(&snapshot, &profile);
+        let signature = self.render_signature(&snapshot, &profile).await;
 
         // 相同输入直接复用渲染结果，避免客户端轮询时重复解析/计算。
         {
@@ -84,7 +84,7 @@ impl AppState {
             // last_good 只对启用该策略的方案有意义，避免每次成功导出都写盘。
             if profile.on_failure == OnFailure::LastGood
                 && let Err(e) = lastgood::save(
-                    &self.store.rendered_dir(),
+                    &self.store.storage(),
                     slug,
                     &LastGood {
                         generated_at: outcome.generated_at,
@@ -92,6 +92,7 @@ impl AppState {
                         yaml: outcome.yaml.clone(),
                     },
                 )
+                .await
             {
                 tracing::warn!("写入 last_good 失败：{e}");
             }
@@ -107,7 +108,7 @@ impl AppState {
 
         // 失败时按 on_failure 决定是否回退
         if profile.on_failure == OnFailure::LastGood {
-            match lastgood::load(&self.store.rendered_dir(), slug) {
+            match lastgood::load(&self.store.storage(), slug).await {
                 Ok(Some(lg)) => {
                     let mut report = outcome.report.clone();
                     report.warn(format!(
@@ -140,19 +141,20 @@ impl AppState {
         Ok(outcome)
     }
 
-    /// 渲染输入签名：store revision + GeoIP 库修改时间 + 所选上游缓存文件元数据。
-    fn render_signature(&self, snapshot: &Store, profile: &Profile) -> String {
+    /// 渲染输入签名：store revision + GeoIP 库修改时间 + 所选上游缓存指纹。
+    async fn render_signature(&self, snapshot: &Store, profile: &Profile) -> String {
         let mut raw = format!("rev={};", snapshot.revision);
         if let Some(info) = self.geo.db_info()
             && let Some(modified) = info.modified
         {
             raw.push_str(&format!("geo={modified:?};"));
         }
+        let storage = self.store.storage();
         for id in &profile.upstreams {
-            let path = self.store.cache_dir().join(format!("{id}.yaml"));
-            match std::fs::metadata(&path) {
-                Ok(meta) => {
-                    raw.push_str(&format!("{id}={:?}:{};", meta.modified().ok(), meta.len()))
+            match crate::cache::load(&storage, id).await {
+                Ok(env) => {
+                    let fingerprint = crate::cache::fingerprint(env.as_ref()).unwrap_or_default();
+                    raw.push_str(&format!("{id}={fingerprint};"));
                 }
                 Err(_) => raw.push_str(&format!("{id}=missing;")),
             }
@@ -218,11 +220,11 @@ impl AppState {
             };
 
             // ② 取缓存；缺失才同步拉取一次
-            let mut env = cache::load(&self.store.cache_dir(), uid)?;
+            let mut env = cache::load(&self.store.storage(), uid).await?;
             if env.as_ref().map(|e| !e.has_content()).unwrap_or(true) {
                 tracing::info!("上游 {} 无可用缓存，导出时同步拉取一次", uid);
                 let _ = self.refresher.refresh_one(uid).await;
-                env = cache::load(&self.store.cache_dir(), uid)?;
+                env = cache::load(&self.store.storage(), uid).await?;
             }
 
             let Some(env) = env else {

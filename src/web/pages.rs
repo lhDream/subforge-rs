@@ -414,8 +414,11 @@ fn fmt_ts(ts: Option<chrono::DateTime<Utc>>) -> String {
     }
 }
 
-fn upstream_row(state: &AppState, u: &Upstream) -> UpstreamRow {
-    let env = cache::load(&state.store.cache_dir(), &u.id).ok().flatten();
+async fn upstream_row(state: &AppState, u: &Upstream) -> UpstreamRow {
+    let env = cache::load(&state.store.storage(), &u.id)
+        .await
+        .ok()
+        .flatten();
     let now = Utc::now();
 
     let (status, status_key, last_attempt, last_success, node_count, last_error, error_kind) =
@@ -555,7 +558,8 @@ pub async fn index(
 
     let mut profiles = Vec::new();
     for p in &snapshot.profiles {
-        let lg = crate::lastgood::load(&state.store.rendered_dir(), &p.slug)
+        let lg = crate::lastgood::load(&state.store.storage(), &p.slug)
+            .await
             .ok()
             .flatten();
         profiles.push(ProfileRow {
@@ -587,11 +591,10 @@ pub async fn index(
         });
     }
 
-    let upstreams = snapshot
-        .upstreams
-        .iter()
-        .map(|u| upstream_row(&state, u))
-        .collect();
+    let mut upstreams = Vec::new();
+    for u in &snapshot.upstreams {
+        upstreams.push(upstream_row(&state, u).await);
+    }
 
     Ok(HtmlTemplate(IndexTpl {
         nav: "profiles",
@@ -599,7 +602,7 @@ pub async fn index(
         profiles,
         upstreams,
         geo_available: state.geo.is_available(),
-        geo_hint: state.store.geoip_dir().display().to_string(),
+        geo_hint: state.store.data_dir().join("geoip").display().to_string(),
         geo_db: state
             .geo
             .db_path()
@@ -624,17 +627,16 @@ pub async fn index(
 // ================================================================ 上游
 
 /// 上游页视图模型。校验失败时同样走这里，只是多带一份回显。
-fn upstreams_tpl(
+async fn upstreams_tpl(
     state: &AppState,
     ctx: &RequestContext,
     snapshot: &Store,
     form: FormEcho,
 ) -> UpstreamsTpl {
-    let rows = snapshot
-        .upstreams
-        .iter()
-        .map(|u| upstream_row(state, u))
-        .collect();
+    let mut rows = Vec::new();
+    for u in &snapshot.upstreams {
+        rows.push(upstream_row(state, u).await);
+    }
     // 新增表单的校验失败也走这里：作用域为空串表示「新增上游」。
     let create_open = form.scope.is_empty() && !form.is_empty();
     UpstreamsTpl {
@@ -661,7 +663,7 @@ pub async fn upstreams_page(
     Query(q): Query<UpstreamsQuery>,
 ) -> Result<Response, AppError> {
     let snapshot = state.store.snapshot().await;
-    let mut tpl = upstreams_tpl(&state, &ctx, &snapshot, FormEcho::default());
+    let mut tpl = upstreams_tpl(&state, &ctx, &snapshot, FormEcho::default()).await;
     tpl.create_open = q.new_form.is_some();
     Ok(HtmlTemplate(tpl).into_response())
 }
@@ -686,12 +688,15 @@ pub async fn upstreams_save(
     // `original` 为空表示这是「新增上游」表单，否则是正在编辑的那一行。
     macro_rules! refill {
         ($field:expr, $label:expr, $msg:expr) => {
-            return Ok(HtmlTemplate(upstreams_tpl(
-                &state,
-                &ctx,
-                &snapshot,
-                FormEcho::fail(&form, &original, $field, $label, $msg),
-            ))
+            return Ok(HtmlTemplate(
+                upstreams_tpl(
+                    &state,
+                    &ctx,
+                    &snapshot,
+                    FormEcho::fail(&form, &original, $field, $label, $msg),
+                )
+                .await,
+            )
             .into_response())
         };
     }
@@ -748,7 +753,7 @@ pub async fn upstreams_save(
     // 重命名 id 需要同步挪动缓存文件
     let renaming = !original.is_empty() && original != id;
     if renaming {
-        cache::remove(&state.store.cache_dir(), &original)?;
+        cache::remove(&state.store.storage(), &original).await?;
     }
 
     state
@@ -802,7 +807,7 @@ pub async fn upstream_delete(
         .store
         .update(None, |store| cascade::delete_upstream(store, &id))
         .await?;
-    cache::remove(&state.store.cache_dir(), &id)?;
+    cache::remove(&state.store.storage(), &id).await?;
     Ok(see_other("/upstreams"))
 }
 
@@ -848,27 +853,22 @@ pub async fn upstream_accept(
 
 // ================================================================ 分组
 
-fn node_names_signature(state: &AppState, snapshot: &Store) -> String {
+async fn node_names_signature(state: &AppState, snapshot: &Store) -> String {
     let mut raw = format!("rev={};", snapshot.revision);
+    let storage = state.store.storage();
     for upstream in &snapshot.upstreams {
-        let path = state
-            .store
-            .cache_dir()
-            .join(format!("{}.yaml", upstream.id));
-        match std::fs::metadata(&path) {
-            Ok(meta) => raw.push_str(&format!(
-                "{}={:?}:{};",
-                upstream.id,
-                meta.modified().ok(),
-                meta.len()
-            )),
+        match cache::load(&storage, &upstream.id).await {
+            Ok(env) => {
+                let fingerprint = cache::fingerprint(env.as_ref()).unwrap_or_default();
+                raw.push_str(&format!("{}={fingerprint};", upstream.id));
+            }
             Err(_) => raw.push_str(&format!("{}=missing;", upstream.id)),
         }
     }
     raw
 }
 
-fn collect_node_names(snapshot: &Store, cache_dir: &std::path::Path) -> Vec<String> {
+fn collect_node_names(snapshot: &Store, bodies: Vec<(String, String)>) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut names = Vec::new();
     let mut push = |name: String| {
@@ -891,12 +891,9 @@ fn collect_node_names(snapshot: &Store, cache_dir: &std::path::Path) -> Vec<Stri
             from_pool.push(name.to_string());
         }
     }
-    for upstream in &snapshot.upstreams {
-        let Ok(Some(env)) = cache::load(cache_dir, &upstream.id) else {
-            continue;
-        };
+    for (_, body) in &bodies {
         let Ok(parsed) = crate::fetch::validate_and_parse(
-            &env.body,
+            body,
             &snapshot.settings.filter_keywords,
             snapshot.settings.filter_enabled,
         ) else {
@@ -920,7 +917,7 @@ fn collect_node_names(snapshot: &Store, cache_dir: &std::path::Path) -> Vec<Stri
 /// 结果按「store revision + 缓存文件元数据」缓存；解析放到阻塞线程池，避免拖慢
 /// async handler（分组页每次打开都会用到）。
 async fn available_node_names(state: &Arc<AppState>, snapshot: &Store) -> Vec<String> {
-    let signature = node_names_signature(state, snapshot);
+    let signature = node_names_signature(state, snapshot).await;
     {
         let cache = state.node_names_cache.read().await;
         if let Some((sig, names)) = cache.as_ref()
@@ -931,8 +928,14 @@ async fn available_node_names(state: &Arc<AppState>, snapshot: &Store) -> Vec<St
     }
 
     let snapshot = snapshot.clone();
-    let cache_dir = state.store.cache_dir();
-    let names = tokio::task::spawn_blocking(move || collect_node_names(&snapshot, &cache_dir))
+    let storage = state.store.storage();
+    let mut bodies = Vec::new();
+    for upstream in &snapshot.upstreams {
+        if let Ok(Some(env)) = cache::load(&storage, &upstream.id).await {
+            bodies.push((upstream.id.clone(), env.body));
+        }
+    }
+    let names = tokio::task::spawn_blocking(move || collect_node_names(&snapshot, bodies))
         .await
         .unwrap_or_default();
     *state.node_names_cache.write().await = Some((signature, names.clone()));
@@ -2109,7 +2112,8 @@ fn geoip_view(
             .unwrap_or_else(|| {
                 state
                     .store
-                    .geoip_dir()
+                    .data_dir()
+                    .join("geoip")
                     .join(geoip_update::AUTO_DB_FILE)
                     .display()
                     .to_string()
@@ -2811,7 +2815,7 @@ pub async fn profile_delete(
             Ok(())
         })
         .await?;
-    let _ = crate::lastgood::remove(&state.store.rendered_dir(), &slug);
+    let _ = crate::lastgood::remove(&state.store.storage(), &slug).await;
     Ok(see_other("/"))
 }
 
@@ -3028,27 +3032,19 @@ pub async fn backups_page(
     Query(q): Query<BackupsQuery>,
 ) -> Result<Response, AppError> {
     let snapshot = state.store.snapshot().await;
-    let rows: Vec<BackupRow> = state
-        .store
-        .list_backups()?
-        .into_iter()
-        .map(|b| BackupRow {
-            name: b
-                .path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string(),
+    let mut rows: Vec<BackupRow> = Vec::new();
+    for b in state.store.list_backups().await? {
+        rows.push(BackupRow {
+            name: b.name,
             created_at: b.created_at,
             size: fmt_bytes(b.size),
-        })
-        .collect();
+        });
+    }
 
     let mut preview = None;
     if let Some(name) = q.preview {
         validate_backup_name(&name)?;
-        let path = state.store.backups_dir().join(&name);
-        let backup = state.store.read_backup(&path)?;
+        let backup = state.store.read_backup(&name).await?;
         let diff = snapshot.diff(&backup);
         let mut diff_rows = vec![
             diff_row("上游", &diff.upstreams),
@@ -3106,7 +3102,6 @@ pub async fn backups_restore(
     form.verify_csrf(&state, &ctx)?;
     let name = form.get_owned("name");
     validate_backup_name(&name)?;
-    let path = state.store.backups_dir().join(&name);
-    state.store.restore(&path, None).await?;
+    state.store.restore(&name, None).await?;
     Ok(see_other("/backups"))
 }
