@@ -410,6 +410,15 @@ body: |
 - 缓存存**原始文本**而非解析结果：解析逻辑升级后可重新解析，格式变化时便于排查。
 - 代价：`body` 作为 block scalar 保存会重新缩进，非字节级原样。若需字节级比对，另出调试副本，**调试副本不得作为数据源**。
 
+#### 网页预览与手动替换缓存
+
+- 管理页面可通过 `/upstreams/{id}/config` 查看与编辑缓存原文；仅查看不触发上游请求，无成功缓存时允许粘贴配置使用。
+- 手动内容复用同步时的解析与假节点过滤校验，过滤后必须有有效节点；校验失败保留旧缓存与表单输入。
+- 手动保存**替换当前缓存**，不是独立覆盖层；后续新同步成功可以覆盖，失败继续使用已有缓存。
+- 手动保存清除 HTTP ETag / Last-Modified、旧强制接受标记；流量与到期仅从新正文提取。`meta.manual_saved_at` 标识手动来源，网络同步成功清除，失败保留。
+- 表单带业务 revision 与缓存内容指纹，提交时重校验；在途同步若发现缓存已变则丢弃旧结果，防止覆盖手动保存。
+- 配置正文含代理密钥，页面仅管理认证可见、HTML 自动转义、响应 `Cache-Control: no-store`；不将正文写入日志。导出仍只提取节点，不继承上游分组、规则或通用设置。
+
 ### 4.2 刷新时机与并发控制
 
 | 时机 | 行为 |
@@ -531,6 +540,7 @@ body: |
 | GET | `/` | 方案列表，展示订阅 URL、上游健康摘要、全部告警 | 是 |
 | GET/POST | `/upstreams` | 上游管理：增删改、四维状态、流量与到期、手动刷新 | 是 |
 | GET/POST | `/nodes` | 手动节点：粘贴分享链接、查看解析结果、删除 | 是 |
+| GET/POST | `/upstreams/{id}/config` | 预览缓存原文、编辑或手动填入并校验保存 | 是 |
 | POST | `/upstreams/{id}/refresh` | 立即刷新单个上游 | 是 |
 | POST | `/upstreams/refresh-all` | 立即刷新全部上游 | 是 |
 | POST | `/upstreams/{id}/accept` | 强制接受零节点响应（二次确认） | 是 |
@@ -564,7 +574,7 @@ body: |
 
 ### 5.1 通用设置页：服务设置与客户端配置必须分开
 
-- **服务设置**（`config.toml`，网页不管理）：`listen`、`password`、`refresh_interval`、`fetch_concurrency`。
+- **服务设置**（`config.toml`，网页不管理）：`listen`、`password`、`refresh_interval`、`fetch_concurrency`、`proxy`。
 - **客户端配置**（`data/store.yaml` 的 `general`）：Clash 的 `mixed-port`、`mode`、`dns` 等，会**进入导出结果**。
 - **服务行为设置**（`data/store.yaml` 的 `settings`）：`region_source`、假节点过滤、`geoip`
   （自动更新开关 / 间隔 / 自定义地址）、`base_url`（订阅链接前缀）。可在网页修改，但**绝不进入导出结果**。
@@ -839,6 +849,34 @@ cargo clippy --all-targets -- -D warnings
 - 修改本文件时保持章节编号稳定。
 
 ## 12. 变更记录
+
+- **v47**：出口代理改为**网页可配**（通用设置页），并修掉一个复选框回显缺陷。**未改 FORMAT_VERSION。**
+  - `AppSettings.proxy`（`ProxySettings { enabled, url, configured }`）：纯新增可选字段。
+    `configured` 区分「旧数据/首次未设置」与「用户在网页里主动关闭」，后者不应回退到 `config.toml`。
+  - 通用设置页新增「上游访问代理」卡片：勾选启用 + 地址；启用时地址为空或非法会回填报错，
+    未启用时允许预填。保存后调用 `Refresher::set_proxy` / `GeoipUpdater::set_proxy`
+    重建 HTTP 客户端，**下一次拉取立即生效**，无需重启。
+  - `config.toml` 的 `proxy` 降级为「网页没设置过时的默认值」；启动日志注明来源。
+  - 修复 `FormEcho::checked`：GET 打开页面时 `FormEcho` 为空，原实现因作用域相等直接返回
+    `false`，把「已启用」的复选框渲染成未勾选（保存前看到的状态是错的）。现在没有提交值时
+    返回 fallback，只有真正提交过且缺该键才表示用户取消勾选。
+  - 验证：203 项 Rust 测试、Clippy、fmt 通过；实际 HTTP 验证启用/取消/非法地址回填、
+    即时生效与页面回显，并复测上游刷新写入正常。未做真实代理链路联调（本机无代理端口）。
+
+- **v46**：新增可选的出口代理 `config.toml` 的 `proxy`（默认直连）。**未改数据格式。**
+  - 作用范围：上游拉取与 GeoIP 库下载。只支持 `http(s)://` 与 `socks5(h)://`，必须写端口。
+  - 不实现任何 Clash 节点协议（§1 非目标）：拉取的 `ss://` / `vmess://` 等节点**不能**直接当代理，
+    需由客户端内核（Mihomo 等）跑起来后，把其 `mixed-port` / `socks-port` 填进 `proxy`。
+  - 代理配置非法或写错时**只告警并回落直连**，不阻止启动；代理地址中的账号密码在日志脱敏。
+  - 代理不可用时沿用既有降级：失败保留旧缓存，不清空已有节点。
+  - 验证：202 项 Rust 测试、Clippy、fmt 通过；新增单测覆盖空值直连、常见代理 URL、非法协议、
+    缺端口与凭据脱敏；未执行真实代理链路联调。
+
+- **v45**：新增上游配置原文预览与手动替换缓存。业务 store 格式不变，缓存元数据新增向后兼容的可选 `manual_saved_at`。
+  - 上游列表提供「预览 / 编辑配置」，无成功缓存时也可粘贴配置；校验失败保留输入与旧缓存。
+  - 手动保存替换当前缓存，清除旧 HTTP 条件请求标记与响应头订阅信息，后续同步成功允许覆盖。
+  - 配置页面沿用管理认证、CSRF 与来源检查；原文自动转义且禁止浏览器缓存。
+  - 验证：197 项 Rust 测试、Clippy、fmt、构建通过；隔离 HTTP 验证手动填入/导出、失败保留、后续成功覆盖、旧表单重试拒绝及认证/CSRF/来源检查；Chrome 无 JS、320px 检查通过。测试使用进程级 `CARGO_PROFILE_DEV_DEBUG=0` 与工作区临时目录，未修改真实数据。未执行 Mihomo 内核加载验收。
 
 - **v44**：新增 GitHub Actions 构建并发布 Docker 镜像到 GHCR。**未改数据格式。**
   - 新增 `.github/workflows/docker.yml`：在 `v*` tag 或手动触发时构建并推送

@@ -118,6 +118,7 @@
     <td class="hint">{{ r.traffic }}</td>
     <td class="cell-actions">
       <div class="row-actions">
+        <a class="btn small ghost" href="/upstreams/{{ r.id }}/config">预览 / 编辑配置</a>
         <button form="uf-{{ r.id }}" class="small">保存修改</button>
         <button form="uf-{{ r.id }}" formaction="/upstreams/{{ r.id }}/refresh" class="small ghost">立即刷新</button>
         <button form="uf-{{ r.id }}" formaction="/upstreams/{{ r.id }}/accept" class="small ghost"

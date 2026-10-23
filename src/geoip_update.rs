@@ -87,7 +87,8 @@ pub struct UpdateOutcome {
 pub struct GeoipUpdater {
     store: StoreHandle,
     geo: Arc<GeoResolver>,
-    client: reqwest::Client,
+    client: tokio::sync::RwLock<reqwest::Client>,
+    timeout: Duration,
     status: RwLock<GeoipStatus>,
     status_path: PathBuf,
     /// 同一时间只允许一个更新（手动与定期共用）。
@@ -95,23 +96,31 @@ pub struct GeoipUpdater {
 }
 
 impl GeoipUpdater {
-    pub fn new(store: StoreHandle, geo: Arc<GeoResolver>) -> Result<Self> {
+    /// `proxy` 为规范化后的出口代理地址；`None` 表示直连。
+    pub fn with_proxy(
+        store: StoreHandle,
+        geo: Arc<GeoResolver>,
+        proxy: Option<&str>,
+    ) -> Result<Self> {
         let status_path = store.geoip_dir().join(STATUS_FILE);
         let status = load_status(&status_path);
-        let client = reqwest::Client::builder()
+        let builder = reqwest::Client::builder()
             .user_agent(format!(
                 "{}/{} (+geoip-updater)",
                 env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION")
             ))
             .connect_timeout(Duration::from_secs(15))
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT);
+        let client = crate::proxy::apply(builder, proxy)
+            .context("创建 GeoIP 下载客户端失败")?
             .build()
             .context("创建 GeoIP 下载客户端失败")?;
         Ok(Self {
             store,
             geo,
-            client,
+            client: tokio::sync::RwLock::new(client),
+            timeout: REQUEST_TIMEOUT,
             status: RwLock::new(status),
             status_path,
             update_lock: Mutex::new(()),
@@ -279,6 +288,23 @@ impl GeoipUpdater {
         })
     }
 
+    /// 替换后续 GeoIP 下载使用的客户端。
+    pub async fn set_proxy(&self, proxy: Option<String>) -> Result<()> {
+        let builder = reqwest::Client::builder()
+            .user_agent(format!(
+                "{}/{} (+geoip-updater)",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION")
+            ))
+            .connect_timeout(Duration::from_secs(15))
+            .timeout(self.timeout);
+        let client = crate::proxy::apply(builder, proxy.as_deref())?
+            .build()
+            .context("创建 GeoIP 下载客户端失败")?;
+        *self.client.write().await = client;
+        Ok(())
+    }
+
     /// 是否到了更新时机。`pub(crate)` 便于单测。
     pub(crate) fn is_due(&self, settings: &GeoipSettings, now: DateTime<Utc>) -> bool {
         let status = self.status();
@@ -291,7 +317,8 @@ impl GeoipUpdater {
         url: &str,
         conditional: Option<&DownloadCondition>,
     ) -> std::result::Result<Download, FetchError> {
-        let mut req = self.client.get(url);
+        let client = self.client.read().await.clone();
+        let mut req = client.get(url);
         if let Some(c) = conditional {
             if let Some(etag) = &c.etag {
                 req = req.header(reqwest::header::IF_NONE_MATCH, etag);
@@ -324,18 +351,18 @@ impl GeoipUpdater {
             });
         }
 
-        if let Some(len) = resp.content_length() {
-            if len > MAX_COMPRESSED as u64 {
-                return Err(FetchError {
-                    kind: ErrorKind::Structure,
-                    message: format!(
-                        "响应体过大（{}），超过上限 {}",
-                        human_size(len),
-                        human_size(MAX_COMPRESSED as u64)
-                    ),
-                    http_status: Some(status_code.as_u16()),
-                });
-            }
+        if let Some(len) = resp.content_length()
+            && len > MAX_COMPRESSED as u64
+        {
+            return Err(FetchError {
+                kind: ErrorKind::Structure,
+                message: format!(
+                    "响应体过大（{}），超过上限 {}",
+                    human_size(len),
+                    human_size(MAX_COMPRESSED as u64)
+                ),
+                http_status: Some(status_code.as_u16()),
+            });
         }
 
         let etag = header_str(&resp, reqwest::header::ETAG);

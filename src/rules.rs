@@ -189,14 +189,13 @@ pub fn check_order(lines: &[String]) -> (Vec<String>, Vec<String>) {
     for (i, line) in lines.iter().enumerate() {
         let parsed = parse_rule_text(line, true);
         if parsed.tp == "MATCH" {
-            if seen_match_at.is_none() {
-                seen_match_at = Some(i);
-            } else {
-                errors.push(format!(
+            match seen_match_at {
+                None => seen_match_at = Some(i),
+                Some(first) => errors.push(format!(
                     "存在多条 MATCH 兜底规则（第 {} 条与第 {} 条）",
-                    seen_match_at.unwrap() + 1,
+                    first + 1,
                     i + 1
-                ));
+                )),
             }
         }
     }

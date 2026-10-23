@@ -36,6 +36,13 @@ pub struct Config {
     #[serde(default = "default_concurrency")]
     pub fetch_concurrency: usize,
 
+    /// 拉取上游、下载 GeoIP 时使用的出口代理（默认直连）。
+    ///
+    /// 只支持 `http(s)://` 与 `socks5(h)://`，通常填本机 Mihomo/Clash 的
+    /// `mixed-port` 或 `socks-port`。空串 = 直连。
+    #[serde(default)]
+    pub proxy: String,
+
     #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
 }
@@ -48,6 +55,7 @@ impl Default for Config {
             refresh_interval: default_refresh(),
             fetch_timeout: default_timeout(),
             fetch_concurrency: default_concurrency(),
+            proxy: String::new(),
             data_dir: default_data_dir(),
         }
     }
@@ -193,6 +201,9 @@ fn write_new_config(path: &Path, cfg: &Config) -> Result<()> {
          fetch_timeout = {timeout}\n\
          # 拉取并发上限\n\
          fetch_concurrency = {concurrency}\n\
+         # 可选出口代理：拉取上游与下载 GeoIP 时使用；留空 = 直连。\n\
+         # 支持 http:// 与 socks5://，通常填本机 Mihomo/Clash 的 mixed-port。\n\
+         proxy = \"\"\n\
          # 业务数据与缓存目录（相对路径相对本配置文件所在目录解析）\n\
          data_dir = {data_dir}\n",
         listen = toml_string(&cfg.listen),
@@ -273,7 +284,7 @@ pub fn load_or_init(path: &Path, base: &Path, env: &EnvOverrides) -> Result<Boot
         generated_password = Some(password);
     }
 
-    validate(&cfg)?;
+    validate(&mut cfg)?;
 
     if !existed {
         write_new_config(path, &cfg)?;
@@ -334,7 +345,7 @@ pub fn print_generated_password(password: &str, config_path: &Path) {
     println!();
 }
 
-fn validate(cfg: &Config) -> Result<()> {
+fn validate(cfg: &mut Config) -> Result<()> {
     if cfg.password.trim().is_empty() {
         bail!("password 不能为空");
     }
@@ -347,7 +358,27 @@ fn validate(cfg: &Config) -> Result<()> {
     if cfg.fetch_timeout.is_zero() {
         bail!("fetch_timeout 必须大于 0");
     }
+    // 代理写错不能拖垮启动：只告警并回落直连。默认直连，行为与此前一致。
+    match crate::proxy::normalize(&cfg.proxy) {
+        Ok(Some(address)) => {
+            cfg.proxy = address.clone();
+            tracing::info!("出口代理：{}", crate::proxy::redact(&address));
+        }
+        Ok(None) => {
+            cfg.proxy.clear();
+            tracing::info!("出口代理：未配置（直连）");
+        }
+        Err(e) => {
+            tracing::warn!("{e}；代理配置无效，本次仍按直连运行，请修正 config.toml 的 proxy");
+            cfg.proxy.clear();
+        }
+    }
     Ok(())
+}
+
+/// 规范化后的代理地址（`None` = 直连）。
+pub fn effective_proxy(cfg: &Config) -> Option<String> {
+    crate::proxy::normalize(&cfg.proxy).ok().flatten()
 }
 
 #[cfg(test)]

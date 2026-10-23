@@ -24,5 +24,14 @@ fetch_timeout = "30s"
 # 拉取并发上限
 fetch_concurrency = 4
 
+# 可选出口代理：拉取上游订阅、下载 GeoIP 库时使用。
+# 留空（默认）= 直连。只支持 http(s):// 与 socks5(h)://，
+# 通常填本机 Mihomo / Clash 的 mixed-port 或 socks-port：
+#   proxy = "http://127.0.0.1:7890"
+#   proxy = "socks5://127.0.0.1:7891"
+#   proxy = "socks5://user:pass@127.0.0.1:1080"
+# 注意：拉下来的节点（ss/vmess 等）不能直接当代理用，需要先由客户端跑起来。
+proxy = ""
+
 # 业务数据与缓存目录（相对路径相对本配置文件所在目录解析）
 data_dir = "data"

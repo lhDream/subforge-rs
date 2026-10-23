@@ -352,18 +352,18 @@ impl AppState {
         }
 
         // 套餐到期
-        if let Some(expire) = env.meta.expire {
-            if expire > 0 {
-                let exp = chrono::DateTime::from_timestamp(expire, 0);
-                if let Some(exp) = exp {
-                    if exp < now {
-                        out.push(format!(
-                            "上游「{}」的套餐已于 {} 过期",
-                            upstream.name,
-                            exp.format("%Y-%m-%d")
-                        ));
-                    }
-                }
+        if let Some(expire) = env.meta.expire
+            && expire > 0
+        {
+            let exp = chrono::DateTime::from_timestamp(expire, 0);
+            if let Some(exp) = exp
+                && exp < now
+            {
+                out.push(format!(
+                    "上游「{}」的套餐已于 {} 过期",
+                    upstream.name,
+                    exp.format("%Y-%m-%d")
+                ));
             }
         }
 
@@ -374,10 +374,10 @@ impl AppState {
             total: env.meta.total,
             expire: env.meta.expire,
         };
-        if let Some(remaining) = info.remaining() {
-            if remaining == 0 {
-                out.push(format!("上游「{}」的流量已用尽", upstream.name));
-            }
+        if let Some(remaining) = info.remaining()
+            && remaining == 0
+        {
+            out.push(format!("上游「{}」的流量已用尽", upstream.name));
         }
     }
 }

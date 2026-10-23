@@ -5,6 +5,7 @@
 //! - 不引入任何前端框架或打包器。
 
 pub mod pages;
+mod upstream_config;
 
 use crate::auth::{self, SID_COOKIE};
 use crate::pipeline::AppState;
@@ -211,16 +212,20 @@ impl FormEcho {
         self.value(scope, key, fallback) == option
     }
 
-    /// 复选框回填：作用域不匹配时用 `fallback`；匹配但键缺失表示用户没勾。
+    /// 复选框回填：作用域不匹配或没有提交值时用 `fallback`；提交过但键缺失表示用户没勾。
     ///
     /// 用 `Borrow<bool>` 是为了同时接受模板里按值取出的 `bool` 与按引用取出的 `&bool`。
+    ///
+    /// 必须区分「没提交」与「取消了勾选」：GET 打开页面用的是 `FormEcho::default()`，
+    /// 作用域是空串、`values` 为空；若只看作用域相等就返回 `false`，
+    /// 会把已启用的复选框渲染成未勾选，用户在保存前看到的状态就是错的。
     pub fn checked(
         &self,
         scope: &str,
         key: &str,
         fallback: impl std::borrow::Borrow<bool>,
     ) -> bool {
-        if self.scope != scope {
+        if self.scope != scope || self.values.is_empty() {
             return *fallback.borrow();
         }
         match self.values.iter().find(|(k, _)| k == key) {
@@ -385,12 +390,12 @@ async fn require_auth(
         .insert(RequestContext::new(&state.csrf_secret, &sid));
 
     let mut resp = next.run(req).await;
-    if existing.is_none() {
-        if let Ok(value) = HeaderValue::from_str(&format!(
+    if existing.is_none()
+        && let Ok(value) = HeaderValue::from_str(&format!(
             "{SID_COOKIE}={sid}; Path=/; SameSite=Strict; HttpOnly"
-        )) {
-            resp.headers_mut().append(header::SET_COOKIE, value);
-        }
+        ))
+    {
+        resp.headers_mut().append(header::SET_COOKIE, value);
     }
     resp
 }
@@ -446,6 +451,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(pages::upstreams_page).post(pages::upstreams_save),
         )
         .route("/upstreams/refresh-all", post(pages::upstreams_refresh_all))
+        .route(
+            "/upstreams/{id}/config",
+            get(upstream_config::page).post(upstream_config::save),
+        )
         .route("/upstreams/{id}/refresh", post(pages::upstream_refresh))
         .route("/upstreams/{id}/accept", post(pages::upstream_accept))
         .route("/upstreams/{id}/delete", post(pages::upstream_delete))

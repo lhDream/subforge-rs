@@ -95,6 +95,24 @@
   </div>
 
   <div class="card">
+    <h2>上游访问代理</h2>
+    <div class="field">
+      <label class="check" for="g-proxy-enabled">
+        <input id="g-proxy-enabled" type="checkbox" name="proxy_enabled" value="on"
+             {% if self.proxy_enabled %}checked="checked"{% endif %}>
+        <span>拉取上游时使用代理</span>
+      </label>
+      <label for="g-proxy-url">代理地址</label>
+      <input id="g-proxy-url" type="text" name="proxy_url" value="{{ proxy_url }}"
+             placeholder="socks5://127.0.0.1:7891 或 http://127.0.0.1:7890"
+             aria-describedby="g-proxy-hint{% if form.invalid("", "proxy_url") %} g-proxy-error{% endif %}"{% if form.invalid("", "proxy_url") %} aria-invalid="true"{% endif %}>
+      <p class="hint" id="g-proxy-hint">只支持 http(s):// 与 socks5(h):// 且必须写端口。通常填本机 Mihomo/Clash 的 mixed-port；拉下来的 ss/vmess 等节点不能直接当代理。保存后立即生效，不需要重启服务。</p>
+      {% if form.invalid("", "proxy_url") %}<p class="field-error" id="g-proxy-error">{{ form.error("", "proxy_url") }}</p>{% endif %}
+      <p class="hint">当前正在生效：<strong class="mono">{{ proxy_effective }}</strong>{% if !self.proxy_enabled && proxy_url.len() > 0 %}（已填写但未启用）{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>地区判定与假节点过滤</h2>
     <div class="form-grid">
       <div class="field">
@@ -113,7 +131,8 @@
         <input id="g-filter-keywords" type="text" name="filter_keywords" value="{{ filter_keywords }}" aria-describedby="g-filter-hint">
         <p class="hint" id="g-filter-hint">逗号分隔。命中关键词的节点不会进入导出的 proxies，但仍会在上游页展示。</p>
         <label class="check" for="g-filter-enabled">
-          <input id="g-filter-enabled" type="checkbox" name="filter_enabled"{% if filter_enabled %} checked{% endif %}>
+          <input id="g-filter-enabled" type="checkbox" name="filter_enabled"
+                 {% if filter_enabled %}checked="checked"{% endif %}>
           <span>启用过滤（信息节点不进入导出的 proxies）
             <span class="hint">可能误杀名字里恰好含「订阅」的真实节点，预览页会列出被过滤的清单。</span>
           </span>
@@ -187,7 +206,8 @@
         </p>
         {% if form.invalid("geoip", "geoip_interval_days") %}<p class="field-error" id="g-geoip-interval-error">{{ form.error("geoip", "geoip_interval_days") }}</p>{% endif %}
         <label class="check" for="g-geoip-auto">
-          <input id="g-geoip-auto" type="checkbox" name="geoip_auto_update"{% if geoip.auto_update %} checked{% endif %}>
+          <input id="g-geoip-auto" type="checkbox" name="geoip_auto_update"
+                 {% if geoip.auto_update %}checked="checked"{% endif %}>
           <span>启用定期自动更新
             <span class="hint">关闭后仍可用下方按钮手动下载；已安装的库继续生效。</span>
           </span>

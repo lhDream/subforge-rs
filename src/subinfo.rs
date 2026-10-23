@@ -106,14 +106,13 @@ pub fn parse_expire_date(text: &str) -> Option<i64> {
             c.get(2)?.as_str().parse().ok()?,
             c.get(3)?.as_str().parse().ok()?,
         )
-    } else if let Some(c) = DATE_SLASH_RE.captures(text) {
+    } else {
+        let c = DATE_SLASH_RE.captures(text)?;
         (
             c.get(1)?.as_str().parse().ok()?,
             c.get(2)?.as_str().parse().ok()?,
             c.get(3)?.as_str().parse().ok()?,
         )
-    } else {
-        return None;
     };
 
     let date = NaiveDate::from_ymd_opt(y, m, d)?;
@@ -131,20 +130,20 @@ pub fn extract_from_names<'a>(names: impl IntoIterator<Item = &'a str>) -> SubIn
         if n.is_empty() {
             continue;
         }
-        if n.contains("剩余流量") || n.contains("流量") {
-            if let Some(b) = parse_traffic_bytes(n) {
-                info.total = info.total.or(Some(b));
-            }
+        if (n.contains("剩余流量") || n.contains("流量"))
+            && let Some(b) = parse_traffic_bytes(n)
+        {
+            info.total = info.total.or(Some(b));
         }
-        if n.contains("已用") || n.contains("已使用") {
-            if let Some(b) = parse_traffic_bytes(n) {
-                info.upload = info.upload.or(Some(b));
-            }
+        if (n.contains("已用") || n.contains("已使用"))
+            && let Some(b) = parse_traffic_bytes(n)
+        {
+            info.upload = info.upload.or(Some(b));
         }
-        if n.contains("到期") || n.contains("过期") || n.contains("有效期") {
-            if let Some(ts) = parse_expire_date(n) {
-                info.expire = info.expire.or(Some(ts));
-            }
+        if (n.contains("到期") || n.contains("过期") || n.contains("有效期"))
+            && let Some(ts) = parse_expire_date(n)
+        {
+            info.expire = info.expire.or(Some(ts));
         }
     }
     info

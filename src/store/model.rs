@@ -241,6 +241,10 @@ pub enum RegionSource {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    /// 出口代理设置，仅影响本服务访问上游与 GeoIP 下载，绝不进入导出结果。
+    /// `configured` 用于区分旧文件/首次初始化的“未设置”与用户主动关闭代理。
+    #[serde(default)]
+    pub proxy: ProxySettings,
     #[serde(default)]
     pub region_source: RegionSource,
     /// 假节点过滤关键词黑名单（AGENTS.md §4.6）。
@@ -257,6 +261,18 @@ pub struct AppSettings {
     /// GeoIP 库的下载与自动更新设置。**只影响本服务，不进入导出结果。**
     #[serde(default)]
     pub geoip: GeoipSettings,
+}
+
+/// 网页配置的出口代理。地址只支持 http(s) 与 socks5(h)，由页面保存时规范化。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProxySettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub url: String,
+    /// 纯新增字段：旧 store.yaml 默认 false，因此继续使用 config.toml。
+    #[serde(default)]
+    pub configured: bool,
 }
 
 /// GeoIP 库自动下载设置（AGENTS.md §3.5）。
@@ -325,6 +341,7 @@ pub fn default_filter_keywords() -> Vec<String> {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            proxy: ProxySettings::default(),
             region_source: RegionSource::default(),
             filter_keywords: default_filter_keywords(),
             filter_enabled: true,

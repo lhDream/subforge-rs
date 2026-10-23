@@ -222,6 +222,8 @@ pub struct GeneralTpl {
     pub nav: &'static str,
     pub csrf: String,
     pub region_source: String,
+    /// 这几个复选框标志是模板里直接引用的名字（不是 fetch 派生模板的局部变量），
+    /// 字段名保持不变；渲染时取 `self.<名字>`。
     pub filter_enabled: bool,
     pub filter_keywords: String,
     /// 订阅链接前缀（BASEURL），空表示相对路径。
@@ -235,6 +237,10 @@ pub struct GeneralTpl {
     pub mode: String,
     pub log_level: String,
     pub ipv6: String,
+    // 名字必须与模板里的变量一致（askama 对派生模板做局部同名遮蔽）。
+    pub proxy_enabled: bool,
+    pub proxy_url: String,
+    pub proxy_effective: String,
     /// GeoIP 库的安装状态与自动更新设置。
     pub geoip: GeoipView,
     /// 提交失败时的回显与字段级错误；正常打开页面时为空。
@@ -415,7 +421,11 @@ fn upstream_row(state: &AppState, u: &Upstream) -> UpstreamRow {
     let (status, status_key, last_attempt, last_success, node_count, last_error, error_kind) =
         match &env {
             Some(e) => (
-                e.meta.status.label().to_string(),
+                if e.meta.manual_saved_at.is_some() {
+                    format!("{} · 手动配置", e.meta.status.label())
+                } else {
+                    e.meta.status.label().to_string()
+                },
                 match e.meta.status {
                     CacheStatus::Ok => "ok",
                     CacheStatus::Stale => "stale",
@@ -529,7 +539,7 @@ fn slugify(s: &str) -> String {
     }
     let out = out.trim_matches('-').to_string();
     if out.is_empty() {
-        format!("item-{}", &crate::auth::random_hex(3))
+        format!("item-{}", crate::auth::random_hex(3))
     } else {
         out
     }
@@ -829,56 +839,9 @@ pub async fn upstream_accept(
     let form = FormData::from_bytes(&body);
     form.verify_csrf(&state, &ctx)?;
 
-    let mut env = cache::load(&state.store.cache_dir(), &id)?
-        .ok_or_else(|| anyhow::anyhow!("上游「{id}」没有缓存"))?;
-
-    // 重新拉一次并强制写入（即使零节点）
-    let snapshot = state.store.snapshot().await;
-    let upstream = snapshot
-        .upstream(&id)
-        .ok_or_else(|| anyhow::anyhow!("上游「{id}」不存在"))?;
-    let url = upstream.url.clone();
-    let keywords = snapshot.settings.filter_keywords.clone();
-    let filter_enabled = snapshot.settings.filter_enabled;
-    drop(snapshot);
-
-    let fetcher = crate::fetch::Fetcher::new(state.cfg.fetch_timeout)?;
-    let result = fetcher
-        .fetch(
-            &url,
-            env.meta.etag.as_deref(),
-            env.meta.last_modified.as_deref(),
-        )
-        .await;
-
-    if let Some(body_text) = result.body {
-        let mut info = result.userinfo.clone();
-        if let Ok(parsed) = crate::fetch::validate_and_parse(&body_text, &keywords, filter_enabled)
-        {
-            info.fill_from(&parsed.fallback_info);
-            let count = parsed.proxies.len();
-            env.commit_success(
-                body_text,
-                &info,
-                result.etag,
-                result.last_modified,
-                count,
-                Utc::now(),
-            );
-        } else {
-            // 零节点：强制接受为一份「合法但为空」的内容
-            env.commit_success(
-                body_text,
-                &info,
-                result.etag,
-                result.last_modified,
-                0,
-                Utc::now(),
-            );
-        }
-        env.meta.forced_at = Some(Utc::now());
-        cache::save(&state.store.cache_dir(), &id, &env)?;
-    }
+    state.refresher.force_accept(&id).await?;
+    state.render_cache.write().await.clear();
+    *state.node_names_cache.write().await = None;
 
     Ok(see_other("/upstreams"))
 }
@@ -1460,7 +1423,7 @@ pub async fn rules_save(
     }
 
     if id.is_empty() {
-        id = format!("r-{}", &crate::auth::random_hex(4));
+        id = format!("r-{}", crate::auth::random_hex(4));
     }
 
     let rule = if !raw.trim().is_empty() {
@@ -1575,7 +1538,7 @@ pub async fn rules_import(
             bad_lines.push(line.to_string());
             continue;
         }
-        let id = format!("r-{}", &crate::auth::random_hex(4));
+        let id = format!("r-{}", crate::auth::random_hex(4));
         if shape_of(&parsed.tp) == RuleShape::Logical {
             // payload 含逗号，结构化不可靠 → 存 raw，UI 会标注「不参与引用检查」
             new_rules.push(RuleDef {
@@ -2059,6 +2022,8 @@ fn general_tpl(
     };
 
     // 出错时以提交值为准，保证「提交失败保留已填内容」。
+    // 这些字段在模板里必须写成 `self.<字段名>`：本函数带 `fetch(path)` 前缀，
+    // 不写 `self.` 时 askama 会把 `<字段名>` 当成普通变量（恒为 false）。
     GeneralTpl {
         nav: "general",
         csrf: ctx.csrf.clone(),
@@ -2080,9 +2045,28 @@ fn general_tpl(
         mode: form.value("", "mode", &get("mode")),
         log_level: form.value("", "log-level", &get("log-level")),
         ipv6: form.value("", "ipv6", &norm_bool("ipv6")),
+        proxy_enabled: form.checked("", "proxy_enabled", snapshot.settings.proxy.enabled),
+        proxy_url: form.value("", "proxy_url", &snapshot.settings.proxy.url),
+        proxy_effective: effective_proxy_view(state, snapshot),
         geoip: geoip_view(state, snapshot, &form, notice),
         form,
     }
+}
+
+fn effective_proxy_view(state: &AppState, snapshot: &Store) -> String {
+    let proxy = if snapshot.settings.proxy.configured {
+        snapshot
+            .settings
+            .proxy
+            .enabled
+            .then(|| snapshot.settings.proxy.url.clone())
+    } else {
+        crate::config::effective_proxy(&state.cfg)
+    };
+    proxy
+        .as_deref()
+        .map(crate::proxy::redact)
+        .unwrap_or_else(|| "直连".to_string())
 }
 
 /// 构造 GeoIP 卡片：合并磁盘上的库信息、持久化状态与表单回显。
@@ -2329,6 +2313,21 @@ pub async fn general_save(
         Ok(v) => v,
         Err(msg) => refill!("", "base_url", "BASEURL", msg),
     };
+    let proxy_enabled = form.get_bool("proxy_enabled");
+    let raw_proxy_url = form.get_owned("proxy_url");
+    let proxy_url = match crate::proxy::normalize(&raw_proxy_url) {
+        Ok(Some(value)) => value,
+        Ok(None) if proxy_enabled => refill!(
+            "",
+            "proxy_url",
+            "代理地址",
+            "已启用代理时必须填写代理地址".to_string()
+        ),
+        Ok(None) => String::new(),
+        Err(e) if proxy_enabled => refill!("", "proxy_url", "代理地址", e.to_string()),
+        Err(_) => raw_proxy_url.trim().to_string(),
+    };
+    let effective_proxy = proxy_enabled.then_some(proxy_url.clone());
 
     state
         .store
@@ -2338,10 +2337,17 @@ pub async fn general_save(
             store.settings.filter_enabled = filter_enabled;
             store.settings.filter_keywords = filter_keywords.clone();
             store.settings.base_url = base_url.clone();
+            store.settings.proxy = ProxySettings {
+                enabled: proxy_enabled,
+                url: proxy_url.clone(),
+                configured: true,
+            };
             Ok(())
         })
         .await?;
 
+    state.refresher.set_proxy(effective_proxy.clone()).await?;
+    state.geoip.set_proxy(effective_proxy).await?;
     Ok(see_other("/general"))
 }
 
@@ -2403,10 +2409,10 @@ pub async fn geoip_settings_save(
     };
 
     let custom_url = form.get_owned("geoip_custom_url");
-    if !custom_url.is_empty() {
-        if let Err(e) = geoip_update::validate_source_url(&custom_url) {
-            refill!("geoip_custom_url", "下载地址", format!("{e:#}"));
-        }
+    if !custom_url.is_empty()
+        && let Err(e) = geoip_update::validate_source_url(&custom_url)
+    {
+        refill!("geoip_custom_url", "下载地址", format!("{e:#}"));
     }
 
     state

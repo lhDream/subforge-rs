@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}编辑上游配置{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>预览 / 编辑配置：{{ name }}</h1>
+  <div class="row-actions"><a class="btn ghost" href="/upstreams">返回上游列表</a></div>
+  <p class="hint">正文会原样保存到当前缓存；仅提取其中的节点，不会继承上游的通用设置、分组或规则。内容可能包含代理密码，仅管理认证可见。</p>
+</div>
+{% if saved %}<div class="notice success" role="status">配置已校验并保存到缓存。下一次网络同步成功后可以覆盖这份手动内容。</div>{% endif %}
+{% if !form.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
+{% if !cache_error.is_empty() %}<div class="notice error" role="alert">{{ cache_error }}。当前文本框仍可粘贴有效配置并保存。</div>{% endif %}
+<div class="card">
+  <div class="row-actions"><span class="badge">{% if has_cache %}已有缓存{% else %}暂无缓存{% endif %}</span>{% if manual_saved_at != "—" %}<span class="hint">手动保存可用，并非网络同步成功；保存于 {{ manual_saved_at }}</span>{% endif %}</div>
+  {% if has_cache %}<dl class="summary-grid"><div><dt>格式</dt><dd>{{ source_format }}</dd></div><div><dt>有效节点</dt><dd>{{ node_count }}</dd></div><div><dt>过滤节点</dt><dd>{{ filtered_count }}</dd></div><div><dt>跳过链接</dt><dd>{{ skipped_links }}</dd></div><div><dt>最近成功</dt><dd>{{ last_success }}</dd></div></dl>{% else %}<p class="hint">没有成功缓存。可以直接粘贴 Clash YAML 或支持的分享链接列表，保存前会执行与网络同步相同的校验。</p>{% endif %}
+  <form method="post" action="/upstreams/{{ id }}/config">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="revision" value="{{ revision }}">
+    <input type="hidden" name="fingerprint" value="{{ fingerprint }}">
+    <div class="field">
+      <label for="upstream-body">配置原文</label>
+      <textarea id="upstream-body" class="code" name="body" rows="24" spellcheck="false" required aria-describedby="upstream-body-hint{% if form.invalid(id, "body") %} upstream-body-error{% endif %}"{% if form.invalid(id, "body") %} aria-invalid="true"{% endif %}>{{ form.value(id, "body", body) }}</textarea>
+      <p class="hint" id="upstream-body-hint">保留原始正文空白；校验失败不会覆盖旧缓存。保存成功会清除远端 ETag、Last-Modified 与旧强制接受标记。</p>
+      {% if form.invalid(id, "body") %}<p class="field-error" id="upstream-body-error">{{ form.error(id, "body") }}</p>{% endif %}
+    </div>
+    <div class="modal-foot"><button>校验并保存到缓存</button></div>
+  </form>
+</div>
+{% endblock %}

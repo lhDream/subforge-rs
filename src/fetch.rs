@@ -5,13 +5,17 @@
 
 use crate::cache::ErrorKind;
 use crate::store::model::{Mapping, Yaml, mget, mstr};
-use crate::subinfo::{SubInfo, extract_from_names, is_fake_node, parse_userinfo};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::subinfo::parse_userinfo;
+use crate::subinfo::{SubInfo, extract_from_names, is_fake_node};
+#[cfg(not(target_arch = "wasm32"))]
+use anyhow::Context;
 use anyhow::Result;
-use std::time::Duration;
 
 /// 机场常按 UA 返回不同格式；UA 不对会拿到 base64 分享链接列表而非 Clash YAML。
 pub const USER_AGENT: &str = "mihomo/1.18.0";
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Default)]
 pub struct FetchResult {
     /// 上游返回 304，内容未变更。
@@ -23,6 +27,7 @@ pub struct FetchResult {
     pub error: Option<(ErrorKind, String)>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl FetchResult {
     fn err(kind: ErrorKind, msg: impl Into<String>) -> Self {
         Self {
@@ -32,17 +37,33 @@ impl FetchResult {
     }
 }
 
+// ---------------------------------------------------------------- 网络部分（native）
+//
+// Workers 没有 reqwest，拉取改由 `worker::Fetch` 在后续阶段实现；这里只保留
+// **响应校验与解析**（纯逻辑），保证 `cache`/`render` 等模块在 wasm 上可复用。
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
 pub struct Fetcher {
     client: reqwest::Client,
+    timeout: std::time::Duration,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Fetcher {
-    pub fn new(timeout: Duration) -> Result<Self> {
-        let client = reqwest::Client::builder()
+    /// `proxy` 为规范化后的代理地址；`None` 表示直连。
+    pub fn with_proxy(timeout: std::time::Duration, proxy: Option<&str>) -> Result<Self> {
+        let builder = reqwest::Client::builder()
             .timeout(timeout)
-            .user_agent(USER_AGENT)
+            .user_agent(USER_AGENT);
+        let client = crate::proxy::apply(builder, proxy)
+            .context("初始化上游拉取客户端失败")?
             .build()?;
-        Ok(Self { client })
+        Ok(Self { client, timeout })
+    }
+
+    pub fn with_proxy_replacement(&self, proxy: Option<&str>) -> Result<Self> {
+        Self::with_proxy(self.timeout, proxy)
     }
 
     pub async fn fetch(
@@ -107,6 +128,7 @@ impl Fetcher {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn header_str(
     resp: &reqwest::Response,
     name: impl reqwest::header::AsHeaderName,

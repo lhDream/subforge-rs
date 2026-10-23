@@ -89,6 +89,10 @@ pub struct CacheMeta {
 
     /// 用户强制接受零节点响应的时刻（§4.4）。
     pub forced_at: Option<DateTime<Utc>>,
+
+    /// 最近一次手动保存正文的时刻；网络同步成功后清除。
+    #[serde(default)]
+    pub manual_saved_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -133,6 +137,33 @@ impl CacheEnvelope {
         self.meta.status = CacheStatus::Ok;
         self.meta.last_error = None;
         self.meta.last_error_kind = None;
+        self.meta.manual_saved_at = None;
+    }
+
+    /// 用已校验的正文替换缓存，并清除远端条件请求与旧流量状态。
+    pub fn commit_manual(
+        &mut self,
+        body: String,
+        parsed: &crate::fetch::ParsedBody,
+        now: DateTime<Utc>,
+    ) {
+        self.body = body;
+        self.meta.last_success_at = Some(now);
+        self.meta.etag = None;
+        self.meta.last_modified = None;
+        self.meta.expire = parsed.fallback_info.expire;
+        self.meta.total = parsed.fallback_info.total;
+        self.meta.upload = parsed.fallback_info.upload;
+        self.meta.download = parsed.fallback_info.download;
+        self.meta.node_count = parsed.proxies.len();
+        self.meta.source_format = Some(parsed.source_format.clone());
+        self.meta.skipped_links = parsed.skipped_links.len();
+        self.meta.forced_at = None;
+        self.meta.manual_saved_at = Some(now);
+        self.meta.last_attempt_at = Some(now);
+        self.meta.status = CacheStatus::Ok;
+        self.meta.last_error = None;
+        self.meta.last_error_kind = None;
     }
 
     /// 仅更新状态字段，**保留全部内容字段**。
@@ -159,7 +190,14 @@ impl CacheEnvelope {
     }
 }
 
-/// 缓存文件路径。`id` 已由调用方校验为 slug。
+/// 计算缓存信封指纹；`None` 表示不存在缓存。
+/// 状态变化也使旧编辑页失效：宁可要求重新载入，不将旧正文绑定到新状态。
+pub fn fingerprint(env: Option<&CacheEnvelope>) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let serialized = serde_yaml_ng::to_string(&env)?;
+    Ok(format!("{:x}", Sha256::digest(serialized.as_bytes())))
+}
+
 pub fn cache_path(dir: &Path, id: &str) -> Result<PathBuf> {
     if !crate::store::valid_slug(id) {
         bail!("非法的上游 id：{id}");
@@ -290,6 +328,44 @@ mod tests {
         let back: CacheEnvelope = serde_yaml_ng::from_str(&text).unwrap();
         assert_eq!(back.body, env.body);
         assert_eq!(back.meta.node_count, 1);
+    }
+
+    #[test]
+    fn manual_body_keeps_text_and_clears_remote_validators() {
+        let mut env = CacheEnvelope::default();
+        env.commit_success(
+            "old".into(),
+            &info(),
+            Some("remote".into()),
+            Some("date".into()),
+            2,
+            Utc::now(),
+        );
+        env.meta.forced_at = Some(Utc::now());
+        let body = "# 保留注释\nproxies:\n  - name: HK\n    type: socks5\n    server: 127.0.0.1\n    port: 1080\n";
+        let parsed = crate::fetch::validate_and_parse(body, &[], false).unwrap();
+        let now = Utc::now();
+        env.commit_manual(body.into(), &parsed, now);
+        assert_eq!(env.body, body);
+        assert_eq!(env.meta.node_count, 1);
+        assert!(env.meta.etag.is_none());
+        assert!(env.meta.last_modified.is_none());
+        assert!(env.meta.expire.is_none());
+        assert!(env.meta.forced_at.is_none());
+        assert_eq!(env.meta.manual_saved_at, Some(now));
+        assert!(env.has_content());
+    }
+
+    #[test]
+    fn cache_fingerprint_changes_for_equal_length_body_edits() {
+        let mut env = CacheEnvelope {
+            body: "one".into(),
+            ..Default::default()
+        };
+        let before = fingerprint(Some(&env)).unwrap();
+        env.body = "two".into();
+        assert_ne!(before, fingerprint(Some(&env)).unwrap());
+        assert_ne!(before, fingerprint(None).unwrap());
     }
 
     #[test]

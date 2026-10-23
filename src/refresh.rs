@@ -7,7 +7,11 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, OnceCell, Semaphore};
+use tokio::sync::{Mutex, OnceCell, RwLock, Semaphore};
+
+mod force;
+#[cfg(test)]
+mod manual_tests;
 
 #[derive(Debug, Clone)]
 pub struct RefreshOutcome {
@@ -21,20 +25,42 @@ pub struct RefreshOutcome {
 
 pub struct Refresher {
     store: StoreHandle,
-    fetcher: Fetcher,
+    fetcher: RwLock<Fetcher>,
     /// 同一上游的重复刷新合并到同一个 OnceCell，不重复发起请求。
     inflight: Mutex<HashMap<String, Arc<OnceCell<Arc<RefreshOutcome>>>>>,
+    /// 串行化缓存正文/状态提交，避免手动保存与在途刷新交错写入。
+    cache_commits: Mutex<()>,
     concurrency: usize,
 }
 
 impl Refresher {
+    #[cfg(test)]
     pub fn new(store: StoreHandle, timeout: Duration, concurrency: usize) -> anyhow::Result<Self> {
+        Self::with_proxy(store, timeout, concurrency, None)
+    }
+
+    /// `proxy` 为规范化后的出口代理地址；`None` 表示直连。
+    pub fn with_proxy(
+        store: StoreHandle,
+        timeout: Duration,
+        concurrency: usize,
+        proxy: Option<&str>,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             store,
-            fetcher: Fetcher::new(timeout)?,
+            fetcher: RwLock::new(Fetcher::with_proxy(timeout, proxy)?),
             inflight: Mutex::new(HashMap::new()),
+            cache_commits: Mutex::new(()),
             concurrency: concurrency.max(1),
         })
+    }
+
+    /// 替换后续拉取使用的客户端；不持锁执行网络请求。
+    pub async fn set_proxy(&self, proxy: Option<String>) -> anyhow::Result<()> {
+        let current = self.fetcher.read().await.clone();
+        let replacement = current.with_proxy_replacement(proxy.as_deref())?;
+        *self.fetcher.write().await = replacement;
+        Ok(())
     }
 
     /// 刷新全部上游，并发受 `concurrency` 限制。
@@ -126,10 +152,10 @@ impl Refresher {
         // 清理在途登记（仅当仍是自己那个 cell）
         {
             let mut map = self.inflight.lock().await;
-            if let Some(existing) = map.get(id) {
-                if Arc::ptr_eq(existing, &cell) {
-                    map.remove(id);
-                }
+            if let Some(existing) = map.get(id)
+                && Arc::ptr_eq(existing, &cell)
+            {
+                map.remove(id);
             }
         }
         outcome
@@ -151,17 +177,18 @@ impl Refresher {
         let filter_enabled = snapshot.settings.filter_enabled;
         drop(snapshot);
 
-        let mut env = match cache::load(&self.store.cache_dir(), id) {
-            Ok(Some(e)) => e,
-            Ok(None) => CacheEnvelope::default(),
+        let loaded_env = match cache::load(&self.store.cache_dir(), id) {
+            Ok(Some(e)) => Some(e),
+            Ok(None) => None,
             Err(e) => {
                 tracing::warn!("读取上游 {id} 的缓存失败，将重建：{e}");
-                CacheEnvelope::default()
+                None
             }
         };
-
-        let result = self
-            .fetcher
+        let mut env = loaded_env.clone().unwrap_or_default();
+        let initial_fingerprint = cache::fingerprint(loaded_env.as_ref()).ok();
+        let fetcher = self.fetcher.read().await.clone();
+        let result = fetcher
             .fetch(
                 &url,
                 env.meta.etag.as_deref(),
@@ -222,21 +249,44 @@ impl Refresher {
                 tracing::warn!("上游 {id} 的缓存正文在 304 后重新解析失败，沿用旧统计：{m}");
             }
             return self
-                .commit(id, &url, env, count, Some(notes.join("，")))
+                .commit(
+                    id,
+                    &url,
+                    env,
+                    count,
+                    Some(notes.join("，")),
+                    initial_fingerprint.as_deref(),
+                )
                 .await;
         }
         // 无本地内容却收到 304 时，下面按普通响应继续处理
 
         if let Some((kind, msg)) = &result.error {
             env.commit_failure(*kind, msg.clone(), now);
-            return self.commit_failure(id, &url, env, *kind, msg.clone()).await;
+            return self
+                .commit_failure(
+                    id,
+                    &url,
+                    env,
+                    *kind,
+                    msg.clone(),
+                    initial_fingerprint.as_deref(),
+                )
+                .await;
         }
 
         let Some(body) = result.body else {
             let msg = "响应体缺失".to_string();
             env.commit_failure(ErrorKind::Network, msg.clone(), now);
             return self
-                .commit_failure(id, &url, env, ErrorKind::Network, msg)
+                .commit_failure(
+                    id,
+                    &url,
+                    env,
+                    ErrorKind::Network,
+                    msg,
+                    initial_fingerprint.as_deref(),
+                )
                 .await;
         };
 
@@ -266,12 +316,14 @@ impl Refresher {
                     }
                 }
                 let msg = (!notes.is_empty()).then(|| notes.join("，"));
-                self.commit(id, &url, env, count, msg).await
+                self.commit(id, &url, env, count, msg, initial_fingerprint.as_deref())
+                    .await
             }
             Err((kind, msg)) => {
                 // 零节点响应：旧缓存非空时不替换（§4.4）
                 env.commit_failure(kind, msg.clone(), now);
-                self.commit_failure(id, &url, env, kind, msg).await
+                self.commit_failure(id, &url, env, kind, msg, initial_fingerprint.as_deref())
+                    .await
             }
         }
     }
@@ -283,13 +335,28 @@ impl Refresher {
         env: CacheEnvelope,
         node_count: usize,
         message: Option<String>,
+        initial_fingerprint: Option<&str>,
     ) -> RefreshOutcome {
-        if !self.upstream_still_matches(id, url_used).await {
+        let _commit_guard = self.cache_commits.lock().await;
+        let current_store = self.store.cache_snapshot().await;
+        if current_store.upstream(id).is_none_or(|u| u.url != url_used) {
             return RefreshOutcome {
                 upstream_id: id.to_string(),
                 status: CacheStatus::Stale,
                 node_count,
                 message: Some("上游已被修改或删除，本次结果已丢弃".to_string()),
+                discarded: true,
+            };
+        }
+        let current_fingerprint = cache::load(&self.store.cache_dir(), id)
+            .ok()
+            .and_then(|env| cache::fingerprint(env.as_ref()).ok());
+        if current_fingerprint.as_deref() != initial_fingerprint {
+            return RefreshOutcome {
+                upstream_id: id.to_string(),
+                status: CacheStatus::Stale,
+                node_count,
+                message: Some("缓存已被其他操作修改，本次刷新结果已丢弃".to_string()),
                 discarded: true,
             };
         }
@@ -318,13 +385,28 @@ impl Refresher {
         env: CacheEnvelope,
         kind: ErrorKind,
         msg: String,
+        initial_fingerprint: Option<&str>,
     ) -> RefreshOutcome {
-        if !self.upstream_still_matches(id, url_used).await {
+        let _commit_guard = self.cache_commits.lock().await;
+        let current_store = self.store.cache_snapshot().await;
+        if current_store.upstream(id).is_none_or(|u| u.url != url_used) {
             return RefreshOutcome {
                 upstream_id: id.to_string(),
                 status: CacheStatus::Stale,
                 node_count: env.meta.node_count,
                 message: Some("上游已被修改或删除，本次结果已丢弃".to_string()),
+                discarded: true,
+            };
+        }
+        let current_fingerprint = cache::load(&self.store.cache_dir(), id)
+            .ok()
+            .and_then(|env| cache::fingerprint(env.as_ref()).ok());
+        if current_fingerprint.as_deref() != initial_fingerprint {
+            return RefreshOutcome {
+                upstream_id: id.to_string(),
+                status: CacheStatus::Stale,
+                node_count: env.meta.node_count,
+                message: Some("缓存已被其他操作修改，本次刷新结果已丢弃".to_string()),
                 discarded: true,
             };
         }
@@ -341,15 +423,59 @@ impl Refresher {
         }
     }
 
-    /// 写缓存前重新校验：上游仍存在且 URL 未变。
+    /// 校验并手动替换上游缓存正文。
     ///
-    /// 否则用户改了地址会用旧地址的数据覆盖新缓存；用户删除了上游会重新生成已删除的缓存。
-    async fn upstream_still_matches(&self, id: &str, url_used: &str) -> bool {
+    /// 正文解析在提交互斥锁外完成；锁内重新读取 store revision、上游和缓存指纹，
+    /// 因此旧表单或在途刷新不能覆盖较新的内容。
+    pub async fn save_manual(
+        &self,
+        id: &str,
+        expected_revision: u64,
+        expected_fingerprint: &str,
+        body: String,
+    ) -> anyhow::Result<()> {
         let snapshot = self.store.snapshot().await;
-        match snapshot.upstream(id) {
-            Some(u) => u.url == url_used,
-            None => false,
+        let upstream_url = snapshot
+            .upstream(id)
+            .ok_or_else(|| anyhow::anyhow!("上游不存在"))?
+            .url
+            .clone();
+        let parsed = validate_and_parse(
+            &body,
+            &snapshot.settings.filter_keywords,
+            snapshot.settings.filter_enabled,
+        )
+        .map_err(|(kind, _)| {
+            anyhow::anyhow!(
+                "配置校验失败（{}）：请检查 YAML 或分享链接，且过滤后至少保留一个有效节点",
+                kind.label()
+            )
+        })?;
+        drop(snapshot);
+
+        let _commit_guard = self.cache_commits.lock().await;
+        let current_snapshot = self.store.cache_snapshot().await;
+        let current_upstream = current_snapshot
+            .upstream(id)
+            .ok_or_else(|| anyhow::anyhow!("上游不存在"))?;
+        if current_snapshot.revision != expected_revision {
+            anyhow::bail!(
+                "数据已被其他操作修改（当前版本 {}，提交版本 {}），请刷新页面后重试",
+                current_snapshot.revision,
+                expected_revision
+            );
         }
+        if current_upstream.url != upstream_url {
+            anyhow::bail!("上游地址已被修改，请刷新页面后重试");
+        }
+        let current = cache::load(&self.store.cache_dir(), id)?;
+        let actual = cache::fingerprint(current.as_ref())?;
+        if actual != expected_fingerprint {
+            anyhow::bail!("缓存已被其他操作修改，请刷新页面后重试");
+        }
+        let mut env = current.unwrap_or_default();
+        env.commit_manual(body, &parsed, Utc::now());
+        cache::save(&self.store.cache_dir(), id, &env)
     }
 
     /// 启动定期刷新后台任务。

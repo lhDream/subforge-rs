@@ -220,6 +220,17 @@ impl StoreHandle {
         self.inner.state.read().await.clone()
     }
 
+    /// 缓存提交期间固定业务版本；调用者不得持有此锁进行网络请求。
+    pub async fn cache_snapshot(&self) -> tokio::sync::RwLockReadGuard<'_, Arc<Store>> {
+        self.inner.state.read().await
+    }
+
+    /// 在短暂读锁内检查当前业务数据并执行本地提交；回调不得进行网络请求。
+    pub async fn with_current<T>(&self, f: impl FnOnce(&Store) -> Result<T>) -> Result<T> {
+        let guard = self.inner.state.read().await;
+        f(&guard)
+    }
+
     // ---------------------------------------------------------- 写
 
     /// 在写锁内完成「读快照 → 计算新状态 → 校验 → 原子写盘 → 替换快照」。
@@ -390,8 +401,10 @@ pub fn atomic_write_bytes(path: &Path, contents: &[u8]) -> Result<()> {
     let tmp = dir.join(format!(".{file_name}.tmp"));
 
     {
-        let mut f = std::fs::File::create(&tmp)
-            .with_context(|| format!("创建临时文件失败：{}", tmp.display()))?;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| {
+            // 附带系统错误码：仅报路径会把 ACCESS_DENIED / SHARING_VIOLATION 等真实原因藏起来。
+            anyhow::anyhow!("创建临时文件失败：{}：{e}", tmp.display())
+        })?;
         f.write_all(contents)?;
         f.sync_all()?;
     }
