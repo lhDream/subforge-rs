@@ -1,0 +1,17 @@
+{
+  // SubForge.rs — Cloudflare Workers 配置。
+  // 管理密码不写在这里：本地用 .dev.vars，线上用 `wrangler secret put SUBFORGE_PASSWORD`。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "subforge-rs",
+  "main": "build/worker/shim.mjs",
+  "compatibility_date": "2026-10-23",
+  "build": {
+    "command": "worker-build --release"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "CORE", "class_name": "Core" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Core"] }],
+  "r2_buckets": [{ "binding": "CACHE", "bucket_name": "subforge-cache" }],
+  "observability": { "enabled": true }
+}

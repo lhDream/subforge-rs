@@ -13,3 +13,8 @@
 /dist/
 *.zip
 *.tar.gz
+
+# Cloudflare Workers
+/build/
+/.wrangler/
+.dev.vars
