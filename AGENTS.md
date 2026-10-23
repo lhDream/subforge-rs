@@ -881,6 +881,9 @@ cargo clippy --all-targets -- -D warnings
     （域名节点只按名字判定）、`wrangler r2 object` CLI 需加 `--remote` 才能看到线上对象。
   - 定时任务：`#[event(scheduled)]` + `wrangler.jsonc` 的 `triggers.crons`（`15 */6 * * *`），
     只刷新到期上游；GeoIP 按 `settings.geoip.interval_days` 判断是否更新。
+  - 整库迁移：Workers 专属 `GET/POST /admin/store`（Basic Auth），用于导入 native 的
+    `store.yaml`；共用 web 路由不提供该能力。`src/workers/` 只保留 DO 定义与 Fetch 拉取，
+    早期另写的导出/缓存/认证兼容层已删除。
 
 - **v47**：出口代理改为**网页可配**（通用设置页），并修掉一个复选框回显缺陷。**未改 FORMAT_VERSION。**
   - `AppSettings.proxy`（`ProxySettings { enabled, url, configured }`）：纯新增可选字段。

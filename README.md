@@ -204,6 +204,41 @@ cargo run -- config.smoke.toml     # 监听 127.0.0.1:18080
 
 完整的发布设计见 [docs/release-design.md](docs/release-design.md)。两种发布形态：
 
+### Cloudflare Workers
+
+与本地版共用同一份业务代码；存储换成 Durable Object + R2。迁移细节见
+[docs/workers-migration.md](docs/workers-migration.md)。
+
+前置：Node ≥ 20、Rust ≥ 1.91、`cargo install worker-build`、Cloudflare 账号并已启用 R2。
+
+```bash
+# 1. 创建 R2 桶（一次）
+npx wrangler r2 bucket create subforge-cache
+
+# 2. 管理密码（Basic Auth 用户名固定为 admin）
+npx wrangler secret put SUBFORGE_PASSWORD
+
+# 3. 部署（wrangler 会调用 worker-build --release）
+npx wrangler deploy
+```
+
+把本地 `data/store.yaml` 迁移上去（整库导入，含上游 token）：
+
+```bash
+# 导出当前线上数据（备份用）
+curl -u admin:<密码> https://<worker>.workers.dev/admin/store -o backup.yaml
+
+# 导入本地数据
+curl -u admin:<密码> --data-binary @data/store.yaml \
+  https://<worker>.workers.dev/admin/store
+```
+
+- 定时刷新：`wrangler.jsonc` 的 `triggers.crons`（默认 `15 */6 * * *`），只刷到期上游；
+  GeoIP 按通用设置里的间隔判断是否更新。
+- 管理页、表单、CSRF、备份恢复与本地版完全一致。
+- Workers 侧限制：出口代理设置不生效（`worker::Fetch` 不支持代理）；GeoIP 无 DNS，
+  域名节点只按节点名判定；`wrangler r2 object` 要看线上对象需加 `--remote`。
+
 ### 便携版（Windows / Linux）
 
 解压后直接运行，配置与数据都落在可执行文件所在目录：
