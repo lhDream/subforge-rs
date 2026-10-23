@@ -776,6 +776,17 @@ src/pipeline.rs         # AppState 与导出粘合
 src/auth.rs             # Basic Auth / CSRF / 订阅令牌
 src/web/mod.rs          # 路由、认证中间件、表单解析
 src/web/pages.rs        # 各管理页 handler
+src/storage.rs          # 存储抽象：get/put/delete/list（native 文件 / wasm DO+R2）
+src/storage/fs_impl.rs  # native 实现：临时文件 + rename 原子提交
+src/storage/wasm_impl.rs# wasm 实现：DO「Core」/obj/* + R2
+src/config_wasm.rs      # Workers 配置：bindings → Config
+src/refresh_wasm.rs     # Workers 刷新：worker::Fetch + 共享缓存信封
+src/geoip_wasm.rs       # Workers GeoIP：R2 加载 mmdb，无 DNS 降级
+src/geoip_update_wasm.rs# Workers GeoIP 下载：Fetch + R2
+src/proxy_wasm.rs       # Workers 代理设置：仅校验/脱敏（Fetch 不支持代理）
+src/workers/            # Worker 入口 + DO（store.rs）+ 兼容层（cache/upstream/export/auth）
+wrangler.jsonc          # Cloudflare Workers 部署配置（DO/R2 绑定）
+docs/workers-migration.md # Workers 迁移设计、阶段与验证记录
 templates/              # askama 模板（base.html 为页面骨架，error.html 为统一错误页）
 static/style.css        # 样式入口：只引用设计变量，不写字面色值
 static/ui-tokens.css    # 设计变量唯一来源（颜色/字号/间距/圆角/阴影/层级/动效）
@@ -851,6 +862,23 @@ cargo clippy --all-targets -- -D warnings
 - 修改本文件时保持章节编号稳定。
 
 ## 12. 变更记录
+
+- **v48**：新增 **Cloudflare Workers** 部署目标，与 native 共用同一份业务代码。**未改 FORMAT_VERSION。**
+  - 存储抽象 `src/storage.rs`（`get/put/delete/list`）：native = 文件系统（临时文件 + rename 原子提交）；
+    wasm = DO「Core」的 `/obj/*`（小对象，单写者串行化）+ R2（缓存信封与 mmdb）。
+    `store`/`cache`/`lastgood` 改为异步接口，`StoreHandle` 持 `Arc<Storage>` 而非 `PathBuf`。
+  - 平台模块按 `cfg` 同名替换：`config_wasm`（bindings/secrets）、`refresh_wasm`（`worker::Fetch`）、
+    `geoip_wasm`（R2 加载 mmdb；Workers 无 DNS，域名节点只按名字判定）、
+    `geoip_update_wasm`（Fetch 下载 + R2 安装）、`proxy_wasm`（仅校验/脱敏，Fetch 不支持出口代理）。
+  - `pipeline`/`web`/`lastgood` 解除 native 门控：管理页、表单、CSRF、备份恢复全部跑在 Workers 上。
+  - `src/workers/`：`#[event(fetch)]` 入口 + DO「Core」+ 兼容层；`wrangler.jsonc` 配置 DO/R2 绑定。
+  - 关键约束：Storage 的 wasm 方法用 `SendFuture` 包装（worker 绑定 `JsFuture` 是 `!Send`，
+    而 axum handler 要求 `Send`）；CSRF 密钥必须稳定（优先 `SUBFORGE_CSRF_SECRET`，
+    否则由管理密码派生），否则多 isolate 下表单校验会随机失败。
+  - 验证：**205 项 Rust 测试**、双目标 clippy/fmt 通过；线上
+    `https://subforge-rs.luhuadream.workers.dev` 九页 200、表单写入 303、`/sub/{slug}` 导出正常。
+  - 已知限制（Workers）：无 Cron 定时刷新（用上游页「立即刷新」）、出口代理设置不生效、
+    GeoIP 无 DNS 解析、`wrangler r2 object` CLI 需加 `--remote` 才能看到线上对象。
 
 - **v47**：出口代理改为**网页可配**（通用设置页），并修掉一个复选框回显缺陷。**未改 FORMAT_VERSION。**
   - `AppSettings.proxy`（`ProxySettings { enabled, url, configured }`）：纯新增可选字段。

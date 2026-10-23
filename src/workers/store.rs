@@ -122,9 +122,15 @@ impl DurableObject for Core {
                 }
             }
             (Method::Get, path) if path.starts_with("/list") => {
-                let prefix = path
-                    .split_once("prefix=")
-                    .map(|(_, p)| urldecode(p))
+                // `req.path()` 不含 query，必须从完整 URL 里取 prefix。
+                let prefix = req
+                    .url()
+                    .ok()
+                    .and_then(|url| {
+                        url.query_pairs()
+                            .find(|(key, _)| key == "prefix")
+                            .map(|(_, value)| value.to_string())
+                    })
                     .unwrap_or_default();
                 let entries = self.index().await?;
                 let mut out = String::new();
@@ -215,24 +221,4 @@ impl Core {
         list.retain(|(existing, _)| existing != key);
         self.index_write(&list).await
     }
-}
-
-/// `%XX` 解码（只处理 `/list?prefix=` 需要的最小集合）。
-fn urldecode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
-            if let Ok(byte) = u8::from_str_radix(hex, 16) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).to_string()
 }

@@ -83,8 +83,8 @@ revision 乐观锁 + 所有读共用同一份快照」。DO 每实例单线程�
 | **P0** ✅ | lib/bin 拆分；wasm 依赖与 cfg 门控；Worker 入口 + axum 适配；`/healthz`；设计文档 | native `cargo test` 绿；`cargo check --target wasm32-unknown-unknown` 绿 |
 | **P1** ✅ | Workers MVP：DO「Core」单写者存 store（revision + 上一版）、R2 缓存、导出链路、Basic Auth、`/admin/store` 导入；`wrangler.jsonc` | `worker-build` + `wrangler dev` 下：导入 native `store.yaml` → `/sub/{slug}` 返回可加载的 Clash YAML |
 | **P2** ✅ | 存储抽象：`Storage`（native 文件系统 / wasm DO+R2）；`cache`/`lastgood`/`store` 异步化；原生 205 测试保持绿 | native 行为不变；`cargo test` / clippy 双目标通过 |
-| **P3** | wasm 平台实现：`config`（vars/secrets）、`refresh`（Fetch）、`geoip`（R2 + 无 DNS 降级）、`geoip_update`（Fetch + R2）；随后解除 `web`/`pipeline` 的 native 门控 | `web` 模块在 wasm 编译通过；管理页在 `wrangler dev` 可打开 |
-| **P4** | 管理页写入（表单/CSRF/revision）、静态资源、备份恢复 UI、Cron 刷新、GeoIP 自动更新、ETag/304 | 与 native 功能对齐 |
+| **P3** ✅ | wasm 平台实现：`config`（vars/secrets）、`refresh`（Fetch）、`geoip`（R2 + 无 DNS 降级）、`geoip_update`（Fetch + R2）、`proxy`（校验/脱敏）；解除 `web`/`pipeline` 门控，管理页整体上线 | 线上 9 个管理页 + 静态资源 200；表单写入 303；`/sub/{slug}` 导出正常 |
+| **P4** | Cron 刷新（定时任务）、GeoIP 自动更新的定期化、ETag/304、`last_good` 线上验证 | 与 native 行为对齐 |
 | **P5** | 部署文档、数据导入工具、CI | 可重复部署；双目标文档齐 |
 
 ### 4.1 迁移策略：向共享层收敛（当前）
@@ -205,4 +205,5 @@ npx wrangler r2 object get subforge-cache/cache/<id>.yaml --remote --file out.ya
 | 2026-10-23 | P1（MVP） | `worker-build --release` 产出 `build/index.js` + `build/index_bg.wasm`（约 2.5MB）；`wrangler dev 4.152.0` 本地启动成功（DO + R2 绑定）。实测：`/healthz` 公开 200；`/` 未认证 401、认证后 200；`POST /admin/store` 导入后 `revision=1`；`GET /sub/test` 返回 `text/yaml`，含 4 个节点、2 个分组、`MATCH` 规则。上游拉取使用本地 fixture 服务（避免请求真实机场），缓存写入 R2。 |
 | 2026-10-23 | P1 线上 | 部署到 `https://subforge-rs.luhuadream.workers.dev`（Worker Startup 7ms；上传 2.5MB / gzip 856KB）。实测：`/healthz` 200、`/` 401/200；导入 store `revision=2`；`/sub/test` 200 `text/yaml`；上游 `https://example.com/` 解析失败按 §4.4 降级（`x-subforge-warnings` 可见），R2 写入 `cache/r2test.yaml`（587B，`--remote` 读取确认）；`POST /admin/refresh-all` 返回各上游状态。测试数据不含真实订阅 token。 |
 | 2026-10-23 | P2 存储抽象 | 新增 `Storage`（get/put/delete/list）：native = 文件系统原子写，wasm = DO `/obj/*` + R2。`cache`/`lastgood`/`store` 改为 async + Storage；备份改用对象名。`cargo test` **205 通过**，native/wasm clippy、fmt 通过。线上版本未重新部署。 |
+| 2026-10-23 | P3 页面整体上线 | 线上 `https://subforge-rs.luhuadream.workers.dev` 实测：`/`、`/upstreams`、`/nodes`、`/groups`、`/rules`、`/aliases`、`/general`、`/backups`、`/profiles/new`、`/static/*` 全部 200（Basic Auth `admin`）。表单写入：POST 新建上游 303 并落库；新建方案（含依赖闭包）303；`/sub/test` 200 `text/yaml`，含手动节点、拓扑排序后的分组与 `MATCH` 规则；上游刷新 303；备份列表 4 份、`?preview=` 200。期间修复：DO 调用误用普通 Fetch、`/list` 未解析 query 导致备份名错乱。 |
 | 2026-10-23 | 工具链 | Rust 从 1.88 升到 **1.99.1**（worker 0.8.7 要求 1.91+）；升级后 clippy 新增的 15 条 lint 已修复。`worker-build 0.8.7` 已安装。 |
