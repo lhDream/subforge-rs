@@ -18,3 +18,6 @@
 /build/
 /.wrangler/
 .dev.vars
+
+# 本地工具状态（可能含凭据，勿提交）
+.workbuddy/
