@@ -365,6 +365,34 @@ pub fn render(store: &Store, profile: &Profile, input: &RenderInput) -> Result<R
     let (rule_lines, has_routing) = build_rules(store, profile, &valid_targets, &mut report)?;
 
     // ---------------------------------------------------------- ⑧ 拼装
+    //
+    // `proxies` 按**分组出现顺序**排列：按分组拓扑序依次代入成员，同一节点只出现
+    // 一次（以最早收录它的分组为准）；没有进入任何分组的节点保持原有相对顺序排在
+    // 最后。分组自身的 `proxies` 列表不受影响。
+    let node_index: HashMap<&str, &PreparedNode> =
+        nodes.iter().map(|n| (n.name.as_str(), n)).collect();
+    let mut ordered_nodes: Vec<&PreparedNode> = Vec::new();
+    let mut placed: HashSet<&str> = HashSet::new();
+    for name in &ordered_names {
+        let Some(eval) = evals.get(name) else {
+            continue;
+        };
+        for member in &eval.members {
+            // 成员里可能混有子分组名与内置策略（DIRECT 等），只取真实节点。
+            let Some(node) = node_index.get(member.as_str()) else {
+                continue;
+            };
+            if placed.insert(node.name.as_str()) {
+                ordered_nodes.push(node);
+            }
+        }
+    }
+    for node in &nodes {
+        if placed.insert(node.name.as_str()) {
+            ordered_nodes.push(node);
+        }
+    }
+
     let mut config = Mapping::new();
     for (k, v) in store.general.iter() {
         config.insert(k.clone(), v.clone());
@@ -372,7 +400,7 @@ pub fn render(store: &Store, profile: &Profile, input: &RenderInput) -> Result<R
     config.insert(
         ystr("proxies"),
         Yaml::Sequence(
-            nodes
+            ordered_nodes
                 .iter()
                 .map(|n| Yaml::Mapping(n.proxy.clone()))
                 .collect(),
@@ -830,6 +858,79 @@ mod tests {
         assert!(text.contains("proxy-groups:"));
         assert!(text.contains("rules:"));
         assert!(text.contains("MATCH,"));
+    }
+
+    /// `proxies` 按分组出现顺序排列：先收录节点者在前；未入组节点排最后。
+    #[test]
+    fn proxies_follow_group_order_not_upstream_order() {
+        let mut store = Store {
+            aliases: default_aliases(),
+            ..Default::default()
+        };
+        store.groups.clear();
+        store.rules.clear();
+        // 美国节点在前，且只收录美国节点；自动选择在后，收录全部。
+        let mut us = Mapping::new();
+        us.insert(ys("type"), ys("select"));
+        store.groups.push(Group {
+            name: "美国节点".into(),
+            clash: us,
+            r#match: GroupMatch {
+                regions: vec!["美国".into()],
+                ..Default::default()
+            },
+            manual_groups: vec![],
+            manual_nodes: vec![],
+            fallback_group: None,
+        });
+        let mut auto = Mapping::new();
+        auto.insert(ys("type"), ys("url-test"));
+        store.groups.push(Group {
+            name: "自动选择".into(),
+            clash: auto,
+            r#match: GroupMatch {
+                all: true,
+                ..Default::default()
+            },
+            manual_groups: vec![],
+            manual_nodes: vec![],
+            fallback_group: None,
+        });
+        store.rules.push(RuleDef {
+            id: "r-final".into(),
+            section: RuleSection::Final,
+            r#type: Some("MATCH".into()),
+            target: Some("自动选择".into()),
+            ..Default::default()
+        });
+
+        let profile = Profile {
+            slug: "home".into(),
+            name: "家庭".into(),
+            upstreams: vec![],
+            groups: vec!["美国节点".into(), "自动选择".into()],
+            rules: vec!["r-final".into()],
+            on_failure: OnFailure::Fail,
+            token: None,
+        };
+
+        // 上游顺序是「日本、美国、未归组」——日本在前。
+        let input = RenderInput {
+            nodes: vec![
+                node("🇯🇵 日本 01", &["日本"]),
+                node("🇺🇸 美国 01", &["美国"]),
+                node("🇸🇬 新加坡 01", &["新加坡"]),
+            ],
+            ..Default::default()
+        };
+        let out = render(&store, &profile, &input).unwrap();
+        let text = out.yaml;
+
+        let us = text.find("🇺🇸 美国 01").unwrap();
+        let jp = text.find("🇯🇵 日本 01").unwrap();
+        let sg = text.find("🇸🇬 新加坡 01").unwrap();
+        assert!(us < jp, "美国节点由第一个分组收录，应排在日本之前");
+        assert!(jp < sg, "未归组节点应排在已归组节点之后");
     }
 
     #[test]
