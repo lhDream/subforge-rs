@@ -343,13 +343,17 @@ pub fn render(store: &Store, profile: &Profile, input: &RenderInput) -> Result<R
         return Ok(failed(report, group_stats));
     }
 
-    // ---------------------------------------------------------- ⑥ 拓扑排序
+    // ---------------------------------------------------------- ⑥ 分组顺序
     let kept_groups: Vec<&Group> = selected_groups
         .iter()
         .filter(|g| !omitted.contains(&g.name))
         .copied()
         .collect();
-    let ordered_names = topological_order(&kept_groups)?;
+    // 拓扑排序只用于**环检测**：Clash 的 `proxy-groups[].proxies` 按名字引用，
+    // 不要求被引用者先定义，因此输出顺序直接沿用库内顺序（用户排序）。
+    // 典型配置里「手动切换 / 自动选择」引用了地区组，它们应当排在最前。
+    topological_order(&kept_groups)?;
+    let ordered_names: Vec<String> = kept_groups.iter().map(|g| g.name.clone()).collect();
     let mut proxy_groups: Vec<Yaml> = Vec::new();
     for name in &ordered_names {
         let Some(g) = store.group(name) else { continue };
@@ -933,8 +937,10 @@ mod tests {
         assert!(jp < sg, "未归组节点应排在已归组节点之后");
     }
 
+    /// `proxy-groups` 按库内顺序输出：容器分组（引用地区组）排在最前，
+    /// 与用户在分组页看到的顺序一致；Clash 不要求被引用者先定义。
     #[test]
-    fn topological_order_puts_dependency_first() {
+    fn proxy_groups_follow_store_order() {
         let store = store_with_fixture();
         let p = profile();
         let input = RenderInput {
@@ -945,7 +951,46 @@ mod tests {
         let text = out.yaml;
         let auto = text.find("自动选择").unwrap();
         let us = text.find("美国节点").unwrap();
-        assert!(auto < us, "被引用的分组应先输出");
+        assert!(auto < us, "库内顺序里自动选择在前，应保持");
+    }
+
+    /// 依赖成环仍然必须报错，即使输出顺序不再依赖拓扑排序。
+    #[test]
+    fn cyclic_group_dependency_still_errors() {
+        let mut store = store_with_fixture();
+        store.groups.clear();
+        for (a, b) in [("A", "B"), ("B", "A")] {
+            let mut clash = Mapping::new();
+            clash.insert(ys("type"), ys("select"));
+            store.groups.push(Group {
+                name: a.into(),
+                clash,
+                r#match: GroupMatch::default(),
+                manual_groups: vec![b.into()],
+                manual_nodes: vec![],
+                fallback_group: None,
+            });
+        }
+        let profile = Profile {
+            slug: "home".into(),
+            name: "家庭".into(),
+            upstreams: vec![],
+            groups: vec!["A".into(), "B".into()],
+            rules: vec![],
+            on_failure: OnFailure::Fail,
+            token: None,
+        };
+        let input = RenderInput {
+            nodes: vec![node("🇺🇸 美国 01", &["美国"])],
+            ..Default::default()
+        };
+        let out = render(&store, &profile, &input).unwrap();
+        assert!(!out.report.ok(), "应整体失败");
+        assert!(
+            out.report.errors.iter().any(|e| e.contains("环")),
+            "应报依赖成环：{:?}",
+            out.report.errors
+        );
     }
 
     #[test]

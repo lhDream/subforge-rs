@@ -869,26 +869,27 @@ async fn node_names_signature(state: &AppState, snapshot: &Store) -> String {
 }
 
 fn collect_node_names(snapshot: &Store, bodies: Vec<(String, String)>) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    let mut names = Vec::new();
-    let mut push = |name: String| {
+    use crate::matcher::{NodeInfo, evaluate_group, evaluate_group_with_covered};
+    use crate::region::regions_from_name;
+
+    fn push(name: &str, names: &mut Vec<String>, seen: &mut std::collections::HashSet<String>) {
         let name = name.trim().to_string();
         if name.is_empty() || !seen.insert(name.clone()) {
             return;
         }
         names.push(name);
-    };
-
-    for policy in ["DIRECT", "REJECT", "PASS", "GLOBAL"] {
-        push(policy.to_string());
     }
 
-    let mut from_pool = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut names: Vec<String> = Vec::new();
+
+    // ① 节点池：手动节点 + 各上游缓存节点，保持到达顺序（不再按名字排序）。
+    let mut pool: Vec<String> = Vec::new();
     for manual in &snapshot.manual_nodes {
         if let Ok(proxy) = crate::links::parse_link(&manual.link)
             && let Some(name) = mstr(&proxy, "name")
         {
-            from_pool.push(name.to_string());
+            pool.push(name.to_string());
         }
     }
     for (_, body) in &bodies {
@@ -901,13 +902,57 @@ fn collect_node_names(snapshot: &Store, bodies: Vec<(String, String)>) -> Vec<St
         };
         for proxy in parsed.proxies {
             if let Some(name) = mstr(&proxy, "name") {
-                from_pool.push(name.to_string());
+                pool.push(name.to_string());
             }
         }
     }
-    from_pool.sort();
-    for name in from_pool {
-        push(name);
+
+    // ② 按分组顺序展开成员：与导出 `proxies` 口径一致（最早收录者先排）。
+    let infos: Vec<NodeInfo> = pool
+        .iter()
+        .map(|name| NodeInfo {
+            name: name.clone(),
+            regions: regions_from_name(name, &snapshot.aliases),
+        })
+        .collect();
+    let in_pool: std::collections::HashSet<&str> = pool.iter().map(String::as_str).collect();
+    let mut covered: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // 兜底分组必须在其他分组之后求值，否则 covered 不完整。
+    let mut order: Vec<&crate::store::model::Group> = snapshot
+        .groups
+        .iter()
+        .filter(|g| !g.r#match.catch_all)
+        .collect();
+    order.extend(snapshot.groups.iter().filter(|g| g.r#match.catch_all));
+
+    for group in order {
+        let evaluated = if group.r#match.catch_all {
+            evaluate_group_with_covered(group, &infos, Some(&covered))
+        } else {
+            evaluate_group(group, &infos)
+        };
+        let Ok(eval) = evaluated else { continue };
+        for member in &eval.members {
+            // 成员里混有子分组名与内置策略，只取节点池里的真实节点。
+            if in_pool.contains(member.as_str()) {
+                push(member, &mut names, &mut seen);
+            }
+        }
+        if !group.r#match.all {
+            covered.extend(eval.auto_matched.iter().cloned());
+        }
+        covered.extend(group.manual_nodes.iter().cloned());
+    }
+
+    // ③ 没有进入任何分组的节点，保持池内顺序追加。
+    for name in &pool {
+        push(name, &mut names, &mut seen);
+    }
+
+    // ④ 内置策略放最后（可直接写进 manual_nodes）。
+    for policy in ["DIRECT", "REJECT", "PASS", "GLOBAL"] {
+        push(policy, &mut names, &mut seen);
     }
     names
 }
