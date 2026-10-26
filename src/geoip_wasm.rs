@@ -41,18 +41,31 @@ pub struct GeoResolver {
 }
 
 impl GeoResolver {
-    /// 从对象存储加载；库缺失时**不报错**，只禁用 GeoIP（§3.5 降级）。
+    /// 从对象存储加载；库缺失或损坏时**不报错**，只禁用 GeoIP（§3.5 降级）。
+    ///
+    /// 注意：这里**不能**把解析失败向上传播——否则一份坏库会让整个 AppState
+    /// 构造失败，所有页面（含 /healthz）都 500。
     pub async fn load(storage: &Storage) -> Result<Self> {
         let loaded = match storage.get(AUTO_DB_KEY).await? {
             Some(bytes) => {
                 let size = bytes.len() as u64;
-                let reader = Reader::from_source(bytes).context("解析 GeoIP 库失败")?;
-                tracing::info!(
-                    "已加载 GeoIP 库：{}（{} 字节）",
-                    reader.metadata.database_type,
-                    size
-                );
-                Some(Loaded { reader, size })
+                match Reader::from_source(bytes) {
+                    Ok(reader) => {
+                        tracing::info!(
+                            "已加载 GeoIP 库：{}（{} 字节）",
+                            reader.metadata.database_type,
+                            size
+                        );
+                        Some(Loaded { reader, size })
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "GeoIP 库无效（{e}），地区判定降级为仅使用节点名；\
+                             可在「通用设置」重新下载，或删除 R2 对象 geoip/geoip-auto.mmdb"
+                        );
+                        None
+                    }
+                }
             }
             None => {
                 tracing::warn!("对象存储中没有 GeoIP 库，地区判定仅使用节点名");

@@ -149,9 +149,10 @@ impl Storage {
         }
         if is_r2_key(key) {
             let bucket = self.bucket()?;
-            let data = String::from_utf8_lossy(bytes).to_string();
+            // ⚠️ 必须按字节写入：mmdb 是二进制，`from_utf8_lossy` 会把非法字节
+            // 替换成 U+FFFD，写出来的库将无法被 maxminddb 解析。
             bucket
-                .put(key.to_string(), data)
+                .put(key.to_string(), bytes.to_vec())
                 .execute()
                 .await
                 .map_err(|e| anyhow::anyhow!("写入 R2 失败：{e}"))?;

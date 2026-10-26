@@ -105,19 +105,22 @@ impl GeoipUpdater {
             current_builtin_source_url(now)
         };
 
-        let _ = force; // Workers 侧暂不做条件请求
         let mut status = self.status();
         status.last_attempt_at = Some(now);
         status.source_url = Some(redact_url(&url));
 
-        let result = self.download(&url, &mut status).await;
+        // 手动下载忽略条件请求；定期更新仍带 ETag，但本地没有可用库时也强制重下。
+        let has_local_db = self.geo.is_available();
+        let conditional = !force && has_local_db;
+        let result = self.download(&url, &mut status, conditional).await;
         let storage = self.store.storage();
         match result {
             Ok(bytes) => {
                 let payload = decode_payload(&bytes)?;
-                crate::geoip::inspect_mmdb(&payload)?;
+                // 先在内存里校验并装载；只有成功后才落盘，避免把坏库写进 R2，
+                // 让下次启动的 GeoResolver 读到损坏数据。
+                let info = self.geo.install_bytes(payload.clone())?;
                 storage.put(crate::geoip::AUTO_DB_KEY, &payload).await?;
-                let info = self.geo.install_bytes(payload)?;
                 status.last_success_at = Some(now);
                 status.last_error = None;
                 status.last_error_kind = None;
@@ -154,11 +157,30 @@ impl GeoipUpdater {
         }
     }
 
-    async fn download(&self, url: &str, status: &mut GeoipStatus) -> Result<Vec<u8>> {
-        worker::send::SendFuture::new(async move { self.download_inner(url, status).await }).await
+    async fn download(
+        &self,
+        url: &str,
+        status: &mut GeoipStatus,
+        conditional: bool,
+    ) -> Result<Vec<u8>> {
+        let url = url.to_string();
+        let etag = if conditional {
+            status.etag.clone()
+        } else {
+            None
+        };
+        worker::send::SendFuture::new(async move {
+            self.download_inner(&url, status, etag.as_deref()).await
+        })
+        .await
     }
 
-    async fn download_inner(&self, url: &str, status: &mut GeoipStatus) -> Result<Vec<u8>> {
+    async fn download_inner(
+        &self,
+        url: &str,
+        status: &mut GeoipStatus,
+        etag: Option<&str>,
+    ) -> Result<Vec<u8>> {
         let storage = self.store.storage();
         let env: &Env = storage.env();
         let _ = env;
@@ -171,7 +193,7 @@ impl GeoipUpdater {
                 env!("CARGO_PKG_VERSION")
             ),
         )?;
-        if let Some(etag) = status.etag.as_deref() {
+        if let Some(etag) = etag {
             let _ = headers.set("If-None-Match", etag);
         }
         let mut init = RequestInit::new();
