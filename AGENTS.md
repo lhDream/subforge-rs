@@ -863,6 +863,52 @@ cargo clippy --all-targets -- -D warnings
 
 ## 12. 变更记录
 
+- **v51**：README 按「门面文档」规范重构（只改文档，未改代码与数据格式）。
+  - **结构**：补徽章、目录（带锚点）、界面截图、环境要求、配置参数表、常见问题、贡献指南，
+    并把部署形态收敛到「安装（Docker / 便携版 / 源码）+ 部署（反向代理 / Workers / 备份恢复）」，
+    避免同一段 Docker 命令出现两遍。
+  - **事实同步**：默认分组 23 → **27**、规则 89 → **184**（55 override + 128 normal + 1 final）；
+    `OpenAI` → **AI**；新增 Reddit / Apple / 游戏加速；补充 v50 的 `/rules?target=` 按分组筛选。
+  - **规则分段**：`override → app → normal → final` 修正为 `override → normal → final`（app 段已于 v15 移除）。
+  - **原则**：README 只做快速上手与入口，详细架构、校验清单与开发约定仍在 AGENTS.md，未重复搬运。
+
+- **v50**：路由规则页新增**按分组筛选**（`/rules?target=<分组名>`）。**未改数据格式。**
+  - **纯 GET 表单**：`<select name="target">` 提交到 `/rules`，地址栏可收藏、可分享；无 JS 也能用，
+    不新增任何 JSON 接口（§2）。
+  - **筛选只作用于显示**：导出的仍是方案勾选的全部规则；页面顶部提示条写明「显示 N 条，已隐藏 M 条」。
+  - **序号保持全局序号**：筛选只隐藏行、不重新编号，因此「上移/下移」与导出顺序仍与页面序号对得上。
+  - **raw 规则在筛选中一律保留**：其目标无法可靠解析，藏起来等于让用户以为规则不存在；
+    列表以「原始规则，目标未知」标注。
+  - **新增「目标」列**：规则表原来只能从 `effective` 那一行文本里看出目标，筛选后更难判断归属。
+  - **操作后回到原筛选视图**：`/rules/move` 与 `/rules/{id}/delete` 读取隐藏字段 `filter_target`，
+    以 303 跳回同一筛选；中文分组名经 percent-encoding 编码。
+  - **校验失败不带筛选**：新增/导入的规则目标未必是当前筛选的，带筛选回填会让用户看不到刚填的内容。
+  - 实现：`rules_tpl` 增加 `filter_target` 参数，筛选判定抽成纯函数 `rule_matches_filter`（可单测）。
+  - 验证：**212 项 Rust 测试**通过（新增 4 项：空筛选、目标匹配、raw 不被隐藏、回跳 URL 编码）、
+    clippy `-D warnings`、`cargo fmt --check` 通过；实测 `/rules` 184 条、`?target=AI` 48 条、
+    `?target=游戏加速` 29 条、不存在的分组走空状态；移动/删除均 303 跳到 `/rules?target=Reddit`。
+  - 环境注记：本机编译需要 `CARGO_TARGET_DIR` 指向短路径（`D:\st`）。长路径下 `ring` 的
+    `cc-rs` 调用偶发 `cl: D8050 无法执行 c1.dll`，与源码无关。
+
+- **v49**：服务分组调整——**`OpenAI` 重命名为 `AI`**，新增 **`Reddit` / `Apple` / `游戏加速`** 三个分组。
+  **未改 FORMAT_VERSION。** 规则来源统一为 ACL4SSR `Clash/Ruleset`。
+  - **AI（48 条规则）**：由 `ACL4SSR AI.list` 派生，覆盖 OpenAI / Claude / Gemini / Copilot /
+    Cursor / Copilot(MS) / Grok(x.ai) / Meta AI / Mistral / Perplexity / Groq / Together 等。
+    原来的 5 条 OpenAI 规则目标由 `OpenAI` 改为 `AI`（规则 id 不变，`r-openai` 等保留）。
+  - **Reddit（4 条）**：`reddit.com` / `redd.it` / `redditmedia.com` / `redditstatic.com`。
+  - **Apple（19 条）**：**只取域名类规则**。ACL4SSR 的 Apple.list 含 `IP-CIDR,17.0.0.0/8` 等 10 段，
+    刻意不导入——它对域名要先做 DNS 解析才能匹配，而 §5/§6 的管线不做该假设，Workers 侧也无 DNS。
+  - **游戏加速（29 条）**：聚合 `Blizzard` / `Epic` / `Origin` / `Xbox` / `Nintendo` / `Sony`
+    六个 list 的域名规则，一个分组统管所有游戏平台。
+  - **分组语义**：四个组都是 `select`，与其他服务组**完全一致**——`manual_groups` 为
+    `美国节点 → 各地区节点 → 自动选择 → 手动切换`，`manual_nodes` 为 `DIRECT`。
+    组内默认值由 Mihomo 取 `proxies` 首项（美国节点），产品未新增任何字段。
+  - **数据**：`data/store.yaml` 就地迁移（分组重命名级联改规则目标与方案勾选），
+    两个方案的 `groups` / `rules` 已同步；规则总数 89 → 184。
+  - **验证**：`/sub/{slug}` 两个方案均 200，导出 184 条规则、27 个分组，
+    各服务目标条数与 store 一致；`/groups`、`/rules` 页面 200。
+    单测断言已同步：normal **128** 条、规则总计 **184** 条（v50 补跑 `cargo test` 全部通过）。
+
 - **v48**：新增 **Cloudflare Workers** 部署目标，与 native 共用同一份业务代码。**未改 FORMAT_VERSION。**
   - 存储抽象 `src/storage.rs`（`get/put/delete/list`）：native = 文件系统（临时文件 + rename 原子提交）；
     wasm = DO「Core」的 `/obj/*`（小对象，单写者串行化）+ R2（缓存信封与 mmdb）。
