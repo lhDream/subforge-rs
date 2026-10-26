@@ -361,6 +361,9 @@ pub fn render(store: &Store, profile: &Profile, input: &RenderInput) -> Result<R
             .get(name)
             .map(|e| e.members.clone())
             .unwrap_or_default();
+        // 子分组段（manual_groups 展开的成员）按**分组列表顺序**重排；
+        // 手动节点与自动匹配节点保持原相对顺序。
+        let members = reorder_subgroup_members(&members, store);
         proxy_groups.push(Yaml::Mapping(g.to_clash(&members)));
     }
 
@@ -503,7 +506,41 @@ fn validate_references(store: &Store, profile: &Profile, report: &mut Report) ->
     Ok(())
 }
 
+/// 把成员列表里「引用的子分组」按 `store.groups` 的库内顺序重排，
+/// 其余成员（手动节点、自动匹配节点）保持原相对顺序。
+///
+/// 背景：`evaluate_group` 按 `manual_groups` 的书写顺序展开子分组，
+/// 但用户在分组页拖出来的顺序才是期望的展示顺序（AGENTS.md §3.4 的段内顺序）。
+fn reorder_subgroup_members(members: &[String], store: &Store) -> Vec<String> {
+    let order: HashMap<&str, usize> = store
+        .groups
+        .iter()
+        .enumerate()
+        .map(|(i, g)| (g.name.as_str(), i))
+        .collect();
+
+    let mut slots: Vec<usize> = Vec::new();
+    let mut subgroups: Vec<&String> = Vec::new();
+    for (i, member) in members.iter().enumerate() {
+        if order.contains_key(member.as_str()) {
+            slots.push(i);
+            subgroups.push(member);
+        }
+    }
+    if subgroups.len() < 2 {
+        return members.to_vec();
+    }
+
+    subgroups.sort_by_key(|name| order[name.as_str()]);
+    let mut out = members.to_vec();
+    for (slot, name) in slots.into_iter().zip(subgroups) {
+        out[slot] = name.clone();
+    }
+    out
+}
+
 /// 拓扑排序：被引用者先输出，同层保持库内顺序。
+/// 现在只用于环检测；输出顺序见 [`reorder_subgroup_members`] 与 ⑥ 的说明。
 fn topological_order(groups: &[&Group]) -> Result<Vec<String>> {
     let by_name: HashMap<&str, &Group> = groups.iter().map(|g| (g.name.as_str(), *g)).collect();
     let mut visited: HashSet<String> = HashSet::new();
@@ -935,6 +972,77 @@ mod tests {
         let sg = text.find("🇸🇬 新加坡 01").unwrap();
         assert!(us < jp, "美国节点由第一个分组收录，应排在日本之前");
         assert!(jp < sg, "未归组节点应排在已归组节点之后");
+    }
+
+    /// 子分组段按分组列表顺序重排，而不是 `manual_groups` 的书写顺序。
+    #[test]
+    fn subgroup_members_follow_store_order() {
+        let mut store = Store {
+            aliases: default_aliases(),
+            ..Default::default()
+        };
+        store.groups.clear();
+        store.rules.clear();
+
+        // 库内顺序：香港节点 → 美国节点 → 手动切换
+        for (name, region) in [("香港节点", "香港"), ("美国节点", "美国")] {
+            let mut clash = Mapping::new();
+            clash.insert(ys("type"), ys("select"));
+            store.groups.push(Group {
+                name: name.into(),
+                clash,
+                r#match: GroupMatch {
+                    regions: vec![region.into()],
+                    ..Default::default()
+                },
+                manual_groups: vec![],
+                manual_nodes: vec![],
+                fallback_group: None,
+            });
+        }
+        let mut clash = Mapping::new();
+        clash.insert(ys("type"), ys("select"));
+        store.groups.push(Group {
+            name: "手动切换".into(),
+            clash,
+            r#match: GroupMatch::default(),
+            // 故意反着写：美国在前、香港在后。
+            manual_groups: vec!["美国节点".into(), "香港节点".into()],
+            manual_nodes: vec![],
+            fallback_group: None,
+        });
+        store.rules.push(RuleDef {
+            id: "r-final".into(),
+            section: RuleSection::Final,
+            r#type: Some("MATCH".into()),
+            target: Some("手动切换".into()),
+            ..Default::default()
+        });
+
+        let profile = Profile {
+            slug: "home".into(),
+            name: "家庭".into(),
+            upstreams: vec![],
+            groups: vec!["香港节点".into(), "美国节点".into(), "手动切换".into()],
+            rules: vec!["r-final".into()],
+            on_failure: OnFailure::Fail,
+            token: None,
+        };
+        let input = RenderInput {
+            nodes: vec![node("🇺🇸 美国 01", &["美国"]), node("🇭🇰 香港 01", &["香港"])],
+            ..Default::default()
+        };
+        let out = render(&store, &profile, &input).unwrap();
+        let text = out.yaml;
+
+        // 定位「手动切换」分组里的成员顺序
+        let start = text.find("name: 手动切换").expect("应有手动切换分组");
+        let tail = &text[start..];
+        let end = tail.find("rules:").unwrap_or(tail.len());
+        let block = &tail[..end];
+        let hk = block.find("香港节点").expect("应包含香港节点");
+        let us = block.find("美国节点").expect("应包含美国节点");
+        assert!(hk < us, "子分组应按库内顺序（香港在前）：{block}");
     }
 
     /// `proxy-groups` 按库内顺序输出：容器分组（引用地区组）排在最前，
