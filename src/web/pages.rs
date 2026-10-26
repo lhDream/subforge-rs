@@ -156,6 +156,12 @@ pub struct RulesTpl {
     pub csrf: String,
     pub rows: Vec<RuleRow>,
     pub group_names: Vec<String>,
+    /// 「按分组筛选」下拉的选项：全部规则中出现过的目标（分组名与内置策略）。
+    pub target_options: Vec<String>,
+    /// 当前筛选的目标；空串表示不筛选。
+    pub filter_target: String,
+    /// 规则总数（不受筛选影响，用于提示「已隐藏 N 条」）。
+    pub total_rules: usize,
     /// 「手动新增规则」弹窗是否直接展开。
     pub add_open: bool,
     /// 「批量粘贴导入」弹窗是否直接展开。
@@ -171,6 +177,11 @@ pub struct RuleRow {
     pub section_label: String,
     pub is_raw: bool,
     pub effective: String,
+    /// 该规则的目标分组（仅结构化规则可得知；raw 为空串）。
+    ///
+    /// 单独成列不只是为了展示：筛选状态下列表被裁剪，
+    /// 若只凭 `effective` 里那一行文本判断归属，用户很难看出这条规则为什么被留下。
+    pub target: String,
 }
 
 #[derive(Template)]
@@ -1380,31 +1391,93 @@ fn split_list(raw: &str) -> Vec<String> {
         .collect()
 }
 
+/// 操作完成后回到规则页时保留筛选条件。
+///
+/// 不带这份回跳，用户筛着「AI」点一下「下移」就会被弹回全部 184 条规则的列表。
+/// 目标名是中文甚至含空格，因此走 percent-encoding，不直接拼进 URL。
+fn rules_back_link(filter_target: &str) -> String {
+    let t = filter_target.trim();
+    if t.is_empty() {
+        "/rules".to_string()
+    } else {
+        format!("/rules?target={}", encode_query_component(t))
+    }
+}
+
+/// 查询串的百分号编码：只保留 RFC 3986 的 unreserved 字符。
+fn encode_query_component(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// 一条规则是否应该出现在某个筛选视图里。
+///
+/// 单独抽出成纯函数，是为了让「raw 规则在筛选下一律保留」这条规则**可被单测覆盖**：
+/// raw 规则的目标无法可靠解析，如果按目标过滤把它藏起来，用户会以为这条规则不存在了。
+fn rule_matches_filter(filter: &str, is_raw: bool, target: &str) -> bool {
+    filter.is_empty() || is_raw || target == filter
+}
+
 // ================================================================ 规则
 
 /// 路由规则页视图模型。校验失败时同样走这里，只是多带一份回显。
-fn rules_tpl(ctx: &RequestContext, snapshot: &Store, form: FormEcho) -> RulesTpl {
+///
+/// `filter_target` 为空时展示全部规则；否则只保留目标相同的结构化规则。
+/// **序号始终是全局序号**——筛选只是隐藏行，不会重新编号，
+/// 这样「上移 / 下移」与导出顺序仍能与页面上的序号对上。
+fn rules_tpl(
+    ctx: &RequestContext,
+    snapshot: &Store,
+    filter_target: &str,
+    form: FormEcho,
+) -> RulesTpl {
     let mut ordered: Vec<&RuleDef> = snapshot.rules.iter().collect();
     ordered.sort_by_key(|r| (crate::rules::section_rank(r.section), 0));
 
     let rows = ordered
         .iter()
         .enumerate()
-        .map(|(i, r)| {
-            let effective = crate::rules::serialize_rule(r).unwrap_or_default();
-            RuleRow {
-                index: i + 1,
-                id: r.id.clone(),
-                section_label: match r.section {
-                    RuleSection::Override => "强制覆盖".to_string(),
-                    RuleSection::Normal => "普通".to_string(),
-                    RuleSection::Final => "兜底".to_string(),
-                },
-                is_raw: r.is_raw(),
-                effective,
-            }
+        .map(|(i, r)| RuleRow {
+            index: i + 1,
+            id: r.id.clone(),
+            section_label: match r.section {
+                RuleSection::Override => "强制覆盖".to_string(),
+                RuleSection::Normal => "普通".to_string(),
+                RuleSection::Final => "兜底".to_string(),
+            },
+            is_raw: r.is_raw(),
+            effective: crate::rules::serialize_rule(r).unwrap_or_default(),
+            target: if r.is_raw() {
+                String::new()
+            } else {
+                r.target.clone().unwrap_or_default()
+            },
         })
+        // 筛选只对结构化规则生效：raw 规则的目标无法可靠解析，
+        // 把它藏起来等于让用户以为这条规则不存在，所以筛选下一律保留并标注。
+        .filter(|row| rule_matches_filter(filter_target, row.is_raw, &row.target))
         .collect();
+
+    // 选项来自规则库里真实出现过的目标，并按规模排序：
+    // 这样分组多了以后，最常筛选的那几个自然排在前面。
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for r in &snapshot.rules {
+        if !r.is_raw()
+            && let Some(t) = r.target.as_deref().filter(|t| !t.is_empty())
+        {
+            *counts.entry(t.to_string()).or_default() += 1;
+        }
+    }
+    let mut target_options: Vec<String> = counts.keys().cloned().collect();
+    target_options.sort_by(|a, b| counts[b].cmp(&counts[a]).then_with(|| a.cmp(b)));
 
     // 新增 / 导入表单的校验失败也走这里：作用域决定展开哪个弹窗。
     let add_open = form.scope.is_empty() && !form.is_empty();
@@ -1415,6 +1488,9 @@ fn rules_tpl(ctx: &RequestContext, snapshot: &Store, form: FormEcho) -> RulesTpl
         csrf: ctx.csrf.clone(),
         rows,
         group_names: snapshot.groups.iter().map(|g| g.name.clone()).collect(),
+        target_options,
+        filter_target: filter_target.to_string(),
+        total_rules: snapshot.rules.len(),
         add_open,
         import_open,
         form,
@@ -1422,12 +1498,16 @@ fn rules_tpl(ctx: &RequestContext, snapshot: &Store, form: FormEcho) -> RulesTpl
 }
 
 /// `/rules?new=1` / `/rules?import=1`：直接展开对应的输入弹窗。
+/// `/rules?target=<分组名>`：只看该分组的规则。
 #[derive(Debug, Default, Deserialize)]
 pub struct RulesQuery {
     #[serde(rename = "new")]
     pub new_form: Option<String>,
     #[serde(rename = "import")]
     pub import_form: Option<String>,
+    /// 按目标筛选；空串或缺省表示不筛选。
+    #[serde(rename = "target")]
+    pub target: Option<String>,
 }
 
 pub async fn rules_page(
@@ -1436,7 +1516,8 @@ pub async fn rules_page(
     Query(q): Query<RulesQuery>,
 ) -> Result<Response, AppError> {
     let snapshot = state.store.snapshot().await;
-    let mut tpl = rules_tpl(&ctx, &snapshot, FormEcho::default());
+    let filter = q.target.as_deref().unwrap_or("").trim();
+    let mut tpl = rules_tpl(&ctx, &snapshot, filter, FormEcho::default());
     tpl.add_open = q.new_form.is_some();
     tpl.import_open = q.import_form.is_some();
     Ok(HtmlTemplate(tpl).into_response())
@@ -1462,11 +1543,14 @@ pub async fn rules_save(
     let snapshot = state.store.snapshot().await;
 
     // 手动新增表单的作用域是空串。
+    // 校验失败时**不带筛选**重渲染：新增的规则目标未必是当前筛选的那个，
+    // 带着筛选回填会让用户看不到自己刚填的内容。
     macro_rules! refill {
         ($field:expr, $label:expr, $msg:expr) => {
             return Ok(HtmlTemplate(rules_tpl(
                 &ctx,
                 &snapshot,
+                "",
                 FormEcho::fail(&form, "", $field, $label, $msg),
             ))
             .into_response())
@@ -1536,6 +1620,7 @@ pub async fn rules_save(
         return Ok(HtmlTemplate(rules_tpl(
             &ctx,
             &snapshot,
+            "",
             FormEcho::fail(&form, "", "", "规则", format!("{e:#}")),
         ))
         .into_response());
@@ -1552,11 +1637,12 @@ pub async fn rules_delete(
 ) -> Result<Response, AppError> {
     let form = FormData::from_bytes(&body);
     form.verify_csrf(&state, &ctx)?;
+    let keep = form.get_owned("filter_target");
     state
         .store
         .update(None, |store| cascade::delete_rule(store, &id))
         .await?;
-    Ok(see_other("/rules"))
+    Ok(see_other(&rules_back_link(&keep)))
 }
 
 /// 批量粘贴导入。逻辑类规则存为 raw（无法安全结构化）。
@@ -1624,6 +1710,7 @@ pub async fn rules_import(
         return Ok(HtmlTemplate(rules_tpl(
             &ctx,
             &snapshot,
+            "",
             FormEcho::fail(&form, "import", "text", "规则文本", msg),
         ))
         .into_response());
@@ -1641,6 +1728,7 @@ pub async fn rules_import(
         return Ok(HtmlTemplate(rules_tpl(
             &ctx,
             &snapshot,
+            "",
             FormEcho::fail(&form, "import", "text", "规则文本", format!("{e:#}")),
         ))
         .into_response());
@@ -1658,6 +1746,7 @@ pub async fn rules_move(
     form.verify_csrf(&state, &ctx)?;
     let id = form.get_owned("id");
     let dir = form.get_owned("dir");
+    let keep = form.get_owned("filter_target");
 
     state
         .store
@@ -1690,7 +1779,7 @@ pub async fn rules_move(
         })
         .await?;
 
-    Ok(see_other("/rules"))
+    Ok(see_other(&rules_back_link(&keep)))
 }
 
 // ================================================================ 地区别名
@@ -3150,4 +3239,44 @@ pub async fn backups_restore(
     validate_backup_name(&name)?;
     state.store.restore(&name, None).await?;
     Ok(see_other("/backups"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_keeps_all_rules_when_empty() {
+        assert!(rule_matches_filter("", false, "AI"));
+        assert!(rule_matches_filter("", true, ""));
+    }
+
+    #[test]
+    fn filter_keeps_only_matching_target() {
+        assert!(rule_matches_filter("AI", false, "AI"));
+        assert!(!rule_matches_filter("AI", false, "Reddit"));
+        assert!(!rule_matches_filter("AI", false, ""));
+    }
+
+    #[test]
+    fn filter_never_hides_raw_rules() {
+        // raw 规则目标无法解析，筛任何分组时都必须仍然可见，
+        // 否则用户会以为这条规则被删掉了。
+        assert!(rule_matches_filter("AI", true, ""));
+        assert!(rule_matches_filter("Reddit", true, ""));
+    }
+
+    #[test]
+    fn back_link_encodes_cjk_and_spaces() {
+        assert_eq!(rules_back_link(""), "/rules");
+        assert_eq!(rules_back_link("   "), "/rules");
+        assert_eq!(rules_back_link("AI"), "/rules?target=AI");
+        // 中文不能原样进 URL：分组名如「游戏加速」需要 percent-encoding
+        assert_eq!(
+            rules_back_link("游戏加速"),
+            "/rules?target=%E6%B8%B8%E6%88%8F%E5%8A%A0%E9%80%9F"
+        );
+        // 空格、& 等分隔符同样要编码，否则会截断查询串
+        assert_eq!(rules_back_link("a b&c"), "/rules?target=a%20b%26c");
+    }
 }

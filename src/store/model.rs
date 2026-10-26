@@ -520,8 +520,9 @@ pub fn default_groups() -> Vec<Group> {
     google.manual_nodes = service_nodes.clone();
 
     // 常用功能分组：每个组都是「选地区」的选择器，规则统一指向分组。
+    // AI 组覆盖 ChatGPT / Claude / Gemini / Copilot 等（来源 ACL4SSR AI.list）。
     let mut services = vec![google];
-    for name in ["OpenAI", "奈飞"] {
+    for name in ["AI", "奈飞"] {
         let mut service = group(name, select(), GroupMatch::default());
         service.manual_groups = service_choices.clone();
         service.manual_nodes = service_nodes.clone();
@@ -538,7 +539,16 @@ pub fn default_groups() -> Vec<Group> {
     steam_download.manual_nodes = vec!["DIRECT".to_string()];
     services.push(steam_download);
 
-    for name in ["Telegram", "Disney+", "Spotify", "TikTok", "GitHub"] {
+    for name in [
+        "Telegram",
+        "Disney+",
+        "Spotify",
+        "TikTok",
+        "GitHub",
+        "Reddit",
+        "Apple",
+        "游戏加速",
+    ] {
         let mut service = group(name, select(), GroupMatch::default());
         service.manual_groups = service_choices.clone();
         service.manual_nodes = service_nodes.clone();
@@ -615,16 +625,120 @@ pub fn default_rules() -> Vec<RuleDef> {
     ];
     // 常用服务域名 → 各自的服务分组；组内默认美国节点，可在客户端切换地区。
     for (id, tp, payload, target) in [
-        ("r-openai", "DOMAIN-KEYWORD", "openai", "OpenAI"),
-        ("r-chatgpt", "DOMAIN-SUFFIX", "chatgpt.com", "OpenAI"),
-        ("r-oaistatic", "DOMAIN-SUFFIX", "oaistatic.com", "OpenAI"),
+        ("r-openai", "DOMAIN-KEYWORD", "openai", "AI"),
+        ("r-chatgpt", "DOMAIN-SUFFIX", "chatgpt.com", "AI"),
+        ("r-oaistatic", "DOMAIN-SUFFIX", "oaistatic.com", "AI"),
         (
             "r-oaiusercontent",
             "DOMAIN-SUFFIX",
             "oaiusercontent.com",
-            "OpenAI",
+            "AI",
         ),
-        ("r-sora", "DOMAIN-SUFFIX", "sora.com", "OpenAI"),
+        ("r-sora", "DOMAIN-SUFFIX", "sora.com", "AI"),
+        // 其余 AI 平台（来源 ACL4SSR AI.list）：Claude / Gemini / Copilot / 聚合站。
+        ("r-anthropic", "DOMAIN-KEYWORD", "anthropic", "AI"),
+        ("r-claude", "DOMAIN-KEYWORD", "claude", "AI"),
+        ("r-anthropic-com", "DOMAIN-SUFFIX", "anthropic.com", "AI"),
+        ("r-claude-ai", "DOMAIN-SUFFIX", "claude.ai", "AI"),
+        ("r-claude-com", "DOMAIN-SUFFIX", "claude.com", "AI"),
+        (
+            "r-claudeusercontent",
+            "DOMAIN-SUFFIX",
+            "claudeusercontent.com",
+            "AI",
+        ),
+        ("r-openai-com", "DOMAIN-SUFFIX", "openai.com", "AI"),
+        (
+            "r-openai-azure",
+            "DOMAIN-SUFFIX",
+            "openaiapi-site.azureedge.net",
+            "AI",
+        ),
+        ("r-ai-google-dev", "DOMAIN", "ai.google.dev", "AI"),
+        ("r-aistudio", "DOMAIN", "aistudio.google.com", "AI"),
+        ("r-bard", "DOMAIN", "bard.google.com", "AI"),
+        ("r-gemini-web", "DOMAIN", "gemini.google.com", "AI"),
+        (
+            "r-generativelanguage",
+            "DOMAIN",
+            "generativelanguage.googleapis.com",
+            "AI",
+        ),
+        ("r-notebooklm", "DOMAIN", "notebooklm.google.com", "AI"),
+        (
+            "r-gemini-suffix",
+            "DOMAIN-SUFFIX",
+            "gemini.google.com",
+            "AI",
+        ),
+        (
+            "r-makersuite-suffix",
+            "DOMAIN-SUFFIX",
+            "makersuite.google.com",
+            "AI",
+        ),
+        (
+            "r-notebooklm-suffix",
+            "DOMAIN-SUFFIX",
+            "notebooklm.google",
+            "AI",
+        ),
+        (
+            "r-notebooklm-com",
+            "DOMAIN-SUFFIX",
+            "notebooklm.google.com",
+            "AI",
+        ),
+        (
+            "r-copilot-proxy",
+            "DOMAIN",
+            "copilot-proxy.githubusercontent.com",
+            "AI",
+        ),
+        (
+            "r-copilot-ms",
+            "DOMAIN-SUFFIX",
+            "copilot.microsoft.com",
+            "AI",
+        ),
+        (
+            "r-copilot-cloud",
+            "DOMAIN-SUFFIX",
+            "copilot.cloud.microsoft",
+            "AI",
+        ),
+        ("r-copilot-github", "DOMAIN", "api.githubcopilot.com", "AI"),
+        ("r-sydney", "DOMAIN", "sydney.bing.com", "AI"),
+        ("r-ai-azure", "DOMAIN-SUFFIX", "ai.azure.com", "AI"),
+        ("r-groq", "DOMAIN", "api.groq.com", "AI"),
+        ("r-groq-console", "DOMAIN", "console.groq.com", "AI"),
+        ("r-together", "DOMAIN", "api.together.xyz", "AI"),
+        ("r-grazie", "DOMAIN-SUFFIX", "grazie.ai", "AI"),
+        (
+            "r-grazie-jetbrains",
+            "DOMAIN-SUFFIX",
+            "grazie.aws.intellij.net",
+            "AI",
+        ),
+        ("r-jetbrains-ai", "DOMAIN-SUFFIX", "jetbrains.ai", "AI"),
+        ("r-x-ai", "DOMAIN-SUFFIX", "x.ai", "AI"),
+        ("r-meta-ai", "DOMAIN-SUFFIX", "meta.ai", "AI"),
+        ("r-mistral", "DOMAIN-SUFFIX", "mistral.ai", "AI"),
+        ("r-perplexity", "DOMAIN-SUFFIX", "perplexity.ai", "AI"),
+        ("r-cursor-com", "DOMAIN-SUFFIX", "cursor.com", "AI"),
+        ("r-cursor-sh", "DOMAIN-SUFFIX", "cursor.sh", "AI"),
+        ("r-auth0", "DOMAIN-SUFFIX", "auth0.com", "AI"),
+        ("r-identrust", "DOMAIN-SUFFIX", "identrust.com", "AI"),
+        (
+            "r-arkoselabs",
+            "DOMAIN-SUFFIX",
+            "client-api.arkoselabs.com",
+            "AI",
+        ),
+        ("r-statsig", "DOMAIN-SUFFIX", "events.statsigapi.net", "AI"),
+        ("r-featuregates", "DOMAIN-SUFFIX", "featuregates.org", "AI"),
+        ("r-intercom", "DOMAIN-SUFFIX", "intercom.io", "AI"),
+        ("r-intercomcdn", "DOMAIN-SUFFIX", "intercomcdn.com", "AI"),
         ("r-netflix", "DOMAIN-KEYWORD", "netflix", "奈飞"),
         ("r-nflx", "DOMAIN-KEYWORD", "nflx", "奈飞"),
         ("r-steam", "DOMAIN-KEYWORD", "steam", "Steam商店"),
@@ -655,6 +769,155 @@ pub fn default_rules() -> Vec<RuleDef> {
         ("r-ttlivecdn", "DOMAIN-SUFFIX", "ttlivecdn.com", "TikTok"),
         ("r-musical-ly", "DOMAIN-SUFFIX", "musical.ly", "TikTok"),
         ("r-github", "DOMAIN-KEYWORD", "github", "GitHub"),
+        ("r-reddit", "DOMAIN-SUFFIX", "reddit.com", "Reddit"),
+        ("r-redd-it", "DOMAIN-SUFFIX", "redd.it", "Reddit"),
+        (
+            "r-redditmedia",
+            "DOMAIN-SUFFIX",
+            "redditmedia.com",
+            "Reddit",
+        ),
+        (
+            "r-redditstatic",
+            "DOMAIN-SUFFIX",
+            "redditstatic.com",
+            "Reddit",
+        ),
+        // Apple：只取域名类规则；IP-CIDR 段（含 17.0.0.0/8）见 AGENTS.md 决策，不植入。
+        ("r-apple", "DOMAIN-SUFFIX", "apple.com", "Apple"),
+        ("r-apple-cn", "DOMAIN-SUFFIX", "apple.com.cn", "Apple"),
+        ("r-apple-co", "DOMAIN-SUFFIX", "apple.co", "Apple"),
+        ("r-apple-news", "DOMAIN-SUFFIX", "apple.news", "Apple"),
+        (
+            "r-apple-cloudkit",
+            "DOMAIN-SUFFIX",
+            "apple-cloudkit.com",
+            "Apple",
+        ),
+        ("r-apple-dns", "DOMAIN-SUFFIX", "apple-dns.net", "Apple"),
+        (
+            "r-apple-mapkit",
+            "DOMAIN-SUFFIX",
+            "apple-mapkit.com",
+            "Apple",
+        ),
+        ("r-appstore", "DOMAIN-SUFFIX", "appstore.com", "Apple"),
+        ("r-itunes", "DOMAIN-SUFFIX", "itunes.com", "Apple"),
+        ("r-icloud", "DOMAIN-SUFFIX", "icloud.com", "Apple"),
+        ("r-icloud-cn", "DOMAIN-SUFFIX", "icloud.com.cn", "Apple"),
+        (
+            "r-icloud-content",
+            "DOMAIN-SUFFIX",
+            "icloud-content.com",
+            "Apple",
+        ),
+        ("r-mzstatic", "DOMAIN-SUFFIX", "mzstatic.com", "Apple"),
+        ("r-aaplimg", "DOMAIN-SUFFIX", "aaplimg.com", "Apple"),
+        ("r-cdn-apple", "DOMAIN-SUFFIX", "cdn-apple.com", "Apple"),
+        ("r-crashlytics", "DOMAIN-SUFFIX", "crashlytics.com", "Apple"),
+        ("r-me-com", "DOMAIN-SUFFIX", "me.com", "Apple"),
+        ("r-akadns", "DOMAIN-SUFFIX", "akadns.net", "Apple"),
+        (
+            "r-apple-scoreresearch",
+            "DOMAIN",
+            "apple.comscoreresearch.com",
+            "Apple",
+        ),
+        // 游戏加速（来源 ACL4SSR Blizzard / Epic / Origin / Xbox / Nintendo / Sony）。
+        ("r-battle-net", "DOMAIN-SUFFIX", "battle.net", "游戏加速"),
+        ("r-battlenet", "DOMAIN-SUFFIX", "battlenet.com", "游戏加速"),
+        ("r-blizzard", "DOMAIN-SUFFIX", "blizzard.com", "游戏加速"),
+        ("r-epicgames", "DOMAIN-SUFFIX", "epicgames.com", "游戏加速"),
+        (
+            "r-epicgames-dev",
+            "DOMAIN-SUFFIX",
+            "epicgames.dev",
+            "游戏加速",
+        ),
+        ("r-epic-ol", "DOMAIN-SUFFIX", "ol.epicgames.com", "游戏加速"),
+        (
+            "r-unrealengine",
+            "DOMAIN-SUFFIX",
+            "unrealengine.com",
+            "游戏加速",
+        ),
+        ("r-paragon", "DOMAIN-SUFFIX", "paragon.com", "游戏加速"),
+        ("r-helpshift", "DOMAIN-SUFFIX", "helpshift.com", "游戏加速"),
+        ("r-ea", "DOMAIN-SUFFIX", "ea.com", "游戏加速"),
+        ("r-origin", "DOMAIN-SUFFIX", "origin.com", "游戏加速"),
+        (
+            "r-origin-akamai",
+            "DOMAIN",
+            "origin-a.akamaihd.net",
+            "游戏加速",
+        ),
+        (
+            "r-originasserts",
+            "DOMAIN",
+            "originasserts.akamaized.net",
+            "游戏加速",
+        ),
+        ("r-tnt-ea", "DOMAIN", "rtm.tnt-ea.com", "游戏加速"),
+        ("r-xbox", "DOMAIN-SUFFIX", "xbox.com", "游戏加速"),
+        ("r-xboxlive", "DOMAIN-SUFFIX", "xboxlive.com", "游戏加速"),
+        ("r-xboxab", "DOMAIN-SUFFIX", "xboxab.com", "游戏加速"),
+        ("r-xboxab-net", "DOMAIN-SUFFIX", "xboxab.net", "游戏加速"),
+        (
+            "r-xboxservice",
+            "DOMAIN-SUFFIX",
+            "xboxservice.com",
+            "游戏加速",
+        ),
+        (
+            "r-xboxservices",
+            "DOMAIN-SUFFIX",
+            "xboxservices.com",
+            "游戏加速",
+        ),
+        ("r-gamepass", "DOMAIN-SUFFIX", "gamepass.com", "游戏加速"),
+        (
+            "r-playstation",
+            "DOMAIN-SUFFIX",
+            "playstation.com",
+            "游戏加速",
+        ),
+        (
+            "r-playstation-net",
+            "DOMAIN-SUFFIX",
+            "playstation.net",
+            "游戏加速",
+        ),
+        (
+            "r-psn",
+            "DOMAIN-SUFFIX",
+            "playstationnetwork.com",
+            "游戏加速",
+        ),
+        (
+            "r-sen",
+            "DOMAIN-SUFFIX",
+            "sonyentertainmentnetwork.com",
+            "游戏加速",
+        ),
+        ("r-nintendo", "DOMAIN-SUFFIX", "nintendo.com", "游戏加速"),
+        (
+            "r-nintendo-net",
+            "DOMAIN-SUFFIX",
+            "nintendo.net",
+            "游戏加速",
+        ),
+        (
+            "r-nintendo-eu",
+            "DOMAIN-SUFFIX",
+            "nintendo-europe.com",
+            "游戏加速",
+        ),
+        (
+            "r-nintendowifi",
+            "DOMAIN-SUFFIX",
+            "nintendowifi.net",
+            "游戏加速",
+        ),
     ] {
         rules.push(rule(id, tp, payload, target));
     }
@@ -882,7 +1145,7 @@ mod tests {
                 "英国节点",
                 "德国节点",
                 "Google服务",
-                "OpenAI",
+                "AI",
                 "奈飞",
                 "Steam商店",
                 "Steam下载",
@@ -891,6 +1154,9 @@ mod tests {
                 "Spotify",
                 "TikTok",
                 "GitHub",
+                "Reddit",
+                "Apple",
+                "游戏加速",
                 "广告拦截",
                 "国内网站",
                 "漏网之鱼",
@@ -948,7 +1214,7 @@ mod tests {
             vec!["DIRECT".to_string()],
             "服务组应提供 DIRECT 直连选项"
         );
-        let openai = store.group("OpenAI").unwrap();
+        let openai = store.group("AI").unwrap();
         assert_eq!(openai.group_type(), "select");
         assert_eq!(
             openai.manual_groups, google.manual_groups,
@@ -959,7 +1225,16 @@ mod tests {
             "所有服务组应共用 DIRECT 选项"
         );
         for name in [
-            "OpenAI", "奈飞", "Telegram", "Disney+", "Spotify", "TikTok", "GitHub",
+            "AI",
+            "奈飞",
+            "Telegram",
+            "Disney+",
+            "Spotify",
+            "TikTok",
+            "GitHub",
+            "Reddit",
+            "Apple",
+            "游戏加速",
         ] {
             assert!(store.group(name).is_some(), "缺少默认服务分组：{name}");
         }
@@ -1004,7 +1279,8 @@ mod tests {
             .iter()
             .filter(|r| r.section == RuleSection::Normal)
             .collect();
-        assert_eq!(normal.len(), 33);
+        // 33 条原服务规则 + 43 条 AI 扩充 + 4 Reddit + 19 Apple + 29 游戏加速。
+        assert_eq!(normal.len(), 128);
         assert_eq!(
             normal
                 .iter()
@@ -1012,21 +1288,54 @@ mod tests {
                 .count(),
             8
         );
+        assert_eq!(
+            normal
+                .iter()
+                .filter(|r| r.target.as_deref() == Some("AI"))
+                .count(),
+            48,
+            "AI 组应覆盖 OpenAI / Claude / Gemini / Copilot 等"
+        );
+        assert_eq!(
+            normal
+                .iter()
+                .filter(|r| r.target.as_deref() == Some("Reddit"))
+                .count(),
+            4
+        );
+        assert_eq!(
+            normal
+                .iter()
+                .filter(|r| r.target.as_deref() == Some("Apple"))
+                .count(),
+            19,
+            "Apple 只植入域名类规则，不含 IP-CIDR"
+        );
+        assert_eq!(
+            normal
+                .iter()
+                .filter(|r| r.target.as_deref() == Some("游戏加速"))
+                .count(),
+            29
+        );
         let mut targets: Vec<&str> = normal.iter().filter_map(|r| r.target.as_deref()).collect();
         targets.sort_unstable();
         targets.dedup();
         assert_eq!(
             targets,
             vec![
+                "AI",
+                "Apple",
                 "Disney+",
                 "GitHub",
                 "Google服务",
-                "OpenAI",
+                "Reddit",
                 "Spotify",
                 "Steam商店",
                 "Telegram",
                 "TikTok",
                 "奈飞",
+                "游戏加速",
             ]
         );
         assert!(
@@ -1059,7 +1368,7 @@ mod tests {
                 .count(),
             5
         );
-        assert_eq!(store.rules.len(), 89);
+        assert_eq!(store.rules.len(), 184);
         let finals: Vec<&RuleDef> = store
             .rules
             .iter()

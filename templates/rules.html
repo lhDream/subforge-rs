@@ -113,20 +113,52 @@ MATCH,自动选择" aria-describedby="import-text-hint{% if form.invalid("import
 </dialog>
 
 <h2>规则列表</h2>
+
+{# 纯 GET 表单：不依赖脚本，筛选后地址栏带上 ?target=… 可直接收藏或分享。 #}
+<form class="row-actions toolbar" method="get" action="/rules" role="search">
+  <label for="rule-filter">按分组筛选</label>
+  <select id="rule-filter" name="target">
+    <option value="">全部分组（{{ total_rules }} 条）</option>
+    {% for t in target_options %}
+    <option value="{{ t }}"{% if t.as_str() == filter_target %} selected{% endif %}>{{ t }}</option>
+    {% endfor %}
+  </select>
+  <button class="ghost small">筛选</button>
+  {% if !filter_target.is_empty() %}
+  <a class="btn ghost small" href="/rules">清除筛选</a>
+  {% endif %}
+</form>
+
+{% if !filter_target.is_empty() %}
+<div class="notice info" role="status">
+  <span class="notice-title">已按「{{ filter_target }}」筛选</span>：显示 {{ rows.len() }} 条，
+  已隐藏 {{ total_rules - rows.len() }} 条。导出的仍然是<strong>全部规则</strong>，筛选只影响这一页的显示。
+</div>
+{% endif %}
+
 {% if rows.is_empty() %}
 <div class="empty-state">
+  {% if !filter_target.is_empty() %}
+  <p class="empty-title">「{{ filter_target }}」下没有规则</p>
+  <p>这个分组还没有任何规则指向它。<a href="/rules">清除筛选</a>查看全部规则，或点「新增规则」把目标设为它。</p>
+  {% else %}
   <p class="empty-title">还没有规则</p>
   <p>至少需要一条 <span class="mono">MATCH</span> 兜底，否则导出会被拦截。点「新增规则」手动添加，或「批量导入」粘贴多行。</p>
+  {% endif %}
 </div>
 {% else %}
 <div class="table-wrap wide">
 <table>
-  <caption>共 {{ rows.len() }} 条规则 · 展开顺序为 override → normal → final</caption>
+  <caption>
+    {% if filter_target.is_empty() %}共 {{ rows.len() }} 条规则{% else %}筛选出 {{ rows.len() }} 条规则（共 {{ total_rules }} 条）{% endif %}
+    · 序号为导出顺序 · 展开顺序为 override → normal → final
+  </caption>
   <thead>
   <tr>
     <th scope="col" class="num">序号</th>
     <th scope="col">分段</th>
     <th scope="col">规则</th>
+    <th scope="col">目标</th>
     <th scope="col">解析方式</th>
     <th scope="col">操作</th>
   </tr>
@@ -140,17 +172,31 @@ MATCH,自动选择" aria-describedby="import-text-hint{% if form.invalid("import
       {{ r.effective }}
       {% if r.is_raw %}<div class="hint">原始模式：不参与分组引用检查与目标校验</div>{% endif %}
     </td>
+    <td>
+      {% if r.is_raw %}
+      <span class="hint">原始规则，目标未知</span>
+      {% else %}
+        {% if r.target.is_empty() %}
+        <span class="hint">—</span>
+        {% else %}
+        <a href="/rules?target={{ r.target }}">{{ r.target }}</a>
+        {% endif %}
+      {% endif %}
+    </td>
     <td class="hint">{% if r.is_raw %}原样输出{% else %}按 Mihomo 语义解析条件、目标与参数{% endif %}</td>
     <td class="cell-actions">
       <div class="row-actions">
+        {# 带 filter_target：移动后回到同一个筛选视图，而不是被弹回全量列表。 #}
         <form class="inline" method="post" action="/rules/move">
           <input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="id" value="{{ r.id }}">
+          <input type="hidden" name="filter_target" value="{{ filter_target }}">
           <button class="small ghost" name="dir" value="up" aria-label="把第 {{ r.index }} 条规则上移一位">↑</button>
           <button class="small ghost" name="dir" value="down" aria-label="把第 {{ r.index }} 条规则下移一位">↓</button>
         </form>
         <form class="inline" method="post" action="/rules/{{ r.id }}/delete">
           <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="filter_target" value="{{ filter_target }}">
           <button class="small danger"
                   data-confirm-title="删除规则"
                   data-confirm-ok="删除规则"
