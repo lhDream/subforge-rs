@@ -578,14 +578,21 @@ pub fn default_groups() -> Vec<Group> {
         ));
     }
     groups.extend(services);
-    groups.push(group(
+
+    // 漏网之鱼默认直连：未被其他分组收录的节点都在这里，若默认走代理，
+    // 就等于把一堆用途不明的流量悄悄交给首项节点。显式把 DIRECT 放在 manual_nodes
+    // 第一位，Mihomo 取 proxies 首项作为默认，于是这些流量默认直连，
+    // 需要时仍可在客户端里切成具体节点。
+    let mut catch_all = group(
         "漏网之鱼",
         select(),
         GroupMatch {
             catch_all: true,
             ..Default::default()
         },
-    ));
+    );
+    catch_all.manual_nodes = vec!["DIRECT".to_string()];
+    groups.push(catch_all);
     groups
 }
 
@@ -1263,7 +1270,13 @@ mod tests {
             vec!["DIRECT".to_string()],
             "国内网站默认 DIRECT"
         );
-        assert!(store.group("漏网之鱼").unwrap().r#match.catch_all);
+        let catch_all_group = store.group("漏网之鱼").unwrap();
+        assert!(catch_all_group.r#match.catch_all);
+        assert_eq!(
+            catch_all_group.manual_nodes,
+            vec!["DIRECT".to_string()],
+            "漏网之鱼默认直连：DIRECT 必须在 manual_nodes 里且排在最前"
+        );
         // 兜底组只能有一个；地区组必须引用别名表里存在的地区。
         assert_eq!(
             store.groups.iter().filter(|g| g.r#match.catch_all).count(),

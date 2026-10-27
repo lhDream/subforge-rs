@@ -863,6 +863,26 @@ cargo clippy --all-targets -- -D warnings
 
 ## 12. 变更记录
 
+- **v52**：兜底分组「漏网之鱼」增加 `DIRECT` 选项并**默认直连**。**未改 FORMAT_VERSION。**
+  - **实现**：该组 `manual_nodes = [DIRECT]`。成员顺序固定为
+    `manual_groups → manual_nodes → 自动匹配`（§3.4），因此 `DIRECT` 成为 `proxies` 首项，
+    Mihomo 取首项作默认 → 漏网流量默认直连。仍可在客户端里切成具体节点。
+  - **理由**：兜底组收的是「没被其他分组匹配到」的流量，默认走代理等于把用途不明的流量
+    静默交给首项节点；默认直连更保守。
+  - **副作用（正向）**：该组最终成员恒非空，不再走「空分组省略 + 警告」路径——
+    以它为目标的规则也不会再被跳过（§6.1 第 16/17 条）。
+  - **⚠️ 新建数据时的注意点**：`default_groups()` 里 `自动选择` 是 `url-test`，
+    其 `manual_groups` 含 `漏网之鱼`；若直接把 `Store::default()` 导出成方案，
+    `url-test` 会经嵌套组测到 `DIRECT`（延迟最低）而几乎总选它，等于架空自动选择。
+    **现有数据不受影响**：`data/store.yaml` 里 `自动选择` 用的是 `match.all`（直接收全部节点，
+    不引用分组）。若要修默认值，应把 `漏网之鱼` 从 `自动选择` 的 `manual_groups` 中移除——
+    本次未改，属独立决策。
+  - **数据**：`data/store.yaml` 就地为该组补上 `manual_nodes: [DIRECT]`（改前已备份）。
+  - **验证**：`cargo test` **212 项通过**（新增断言：漏网之鱼 `manual_nodes == [DIRECT]`）、
+    clippy `-D warnings`、`fmt --check` 通过；实测两个方案 `/sub/*` 导出中
+    `漏网之鱼.proxies[0] == DIRECT`、该组非空，`/groups` 表单回显 `manual_nodes=DIRECT`
+    与 `catch_all` 勾选均正确。
+
 - **v51**：README 按「门面文档」规范重构（只改文档，未改代码与数据格式）。
   - **结构**：补徽章、目录（带锚点）、界面截图、环境要求、配置参数表、常见问题、贡献指南，
     并把部署形态收敛到「安装（Docker / 便携版 / 源码）+ 部署（反向代理 / Workers / 备份恢复）」，
