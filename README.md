@@ -20,7 +20,7 @@
 ![Rust](https://img.shields.io/badge/rust-edition%202024-orange)
 ![Docker](https://img.shields.io/badge/ghcr.io-subforge--rs-informational)
 
-> 架构约束、设计取舍与开发规则详见 [AGENTS.md](AGENTS.md)。**改动代码前请先读它。**
+> 架构约束、设计取舍与开发规则见仓库中的 `AGENTS.md`（内部开发文档，不随仓库分发）。
 
 ## 目录
 
@@ -386,7 +386,7 @@ DB-IP 的许可说明见 <https://db-ip.com/db/lite.php>。
 
 ## 开发
 
-架构说明、领域模型与开发约定都在 [AGENTS.md](AGENTS.md)；UI 规范见
+架构说明、领域模型与开发约定见 `AGENTS.md`（内部开发文档，不随仓库分发）；UI 规范见
 [docs/ui-design-spec.md](docs/ui-design-spec.md)。
 
 ```bash
@@ -413,7 +413,7 @@ cargo run -- config.smoke.toml     # 监听 127.0.0.1:18080
 ### 目录结构
 
 ```
-src/          源码（模块职责见 AGENTS.md §9）
+src/          源码（模块职责见 src/lib.rs 的模块声明与各文件头注释）
 templates/    askama 模板
 static/       样式与渐进增强脚本（无构建链）
 fixtures/     冒烟测试用的假订阅
@@ -516,11 +516,11 @@ GeoIP 会判成入口地区；在「地区别名」页补关键词，或确认�
 ## 贡献指南
 
 - 提 Issue 请附上：**现象 / 复现步骤 / 期望行为**，以及版本、脱敏后的 `config.toml` 与相关日志。
-- 改动代码前请先读 [AGENTS.md](AGENTS.md)：它写明了架构硬约束（前后端不分离、纯函数边界、
+- 改动代码前请先读 `AGENTS.md`（内部开发文档）：它写明了架构硬约束（前后端不分离、纯函数边界、
   节点原样透传、引用完整性）与明确的非目标。
 - PR 前请通过 `cargo test`、`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`，
   并说明验证方式；新增逻辑请补单测（尤其是纯函数层）。
-- 变更请在 [AGENTS.md](AGENTS.md) 末尾的变更记录追加一条（版本号 + 改动 + 验证）；
+- 变更请在 `AGENTS.md` 末尾的变更记录追加一条（版本号 + 改动 + 验证）；
   数据格式变动时同步更新 `FORMAT_VERSION` 与迁移逻辑。
 - 不要提交密码、真实订阅地址、GeoIP 库文件或 `data/` 下的任何内容。
 

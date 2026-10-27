@@ -2,7 +2,7 @@
 
 > 状态：P0 完成（2026-10-23）
 > 创建：2026-10-23
-> 关联：[AGENTS.md](../AGENTS.md)、[docs/release-design.md](release-design.md)
+> 关联：`AGENTS.md`（内部开发文档，不随仓库分发）、[docs/release-design.md](release-design.md)
 
 ## 1. 目标与边界
 
