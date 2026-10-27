@@ -53,7 +53,7 @@
 - **多套方案并存**：一组「上游 + 分组 + 规则」的选择可保存为命名方案，每个方案有独立订阅 URL。
 - **缓存优先、失败降级**：上游数据落盘缓存并定期刷新；拉取失败继续用旧数据，**HTTP 200 不等于内容可用**（新响应必须通过解析与结构校验才能替换缓存）。
 - **应用分组自带出口选项**：Google服务 / AI / 奈飞 / Steam商店 / Telegram / Disney+ / Spotify / TikTok / GitHub / Reddit / Apple / 游戏加速 组内包含各地区的 `自动选择`、`手动切换` 与 `DIRECT`，可在客户端直接切换出口或临时直连。
-- **开箱即用的规则库**：默认 27 个分组、184 条路由规则（来源 ACL4SSR `Clash/Ruleset`），按 AI / 流媒体 / 社交 / 游戏 / 广告拦截 / 国内直连分好组；已有 `store.yaml` 不会被覆盖。
+- **开箱即用的规则库**：默认 27 个分组、198 条路由规则（来源 ACL4SSR `Clash/Ruleset`），按 AI / 流媒体 / 社交 / 游戏 / 广告拦截 / 国内直连分好组；已有 `store.yaml` 不会被覆盖。
 - **Steam 分流**：商店/社区走代理（`Steam商店`），下载 CDN 走直连（`Steam下载`），下载规则在 override 段优先于商店规则。
 - **兜底分组默认直连**：机场新增地区导致节点无组可归时，由 `catch_all` 分组（预设名「漏网之鱼」）接住，节点不会凭空消失；该组**默认选项是 `DIRECT`**，用途不明的流量不会悄悄走代理。
 - **方案依赖自动补全**：勾选分组时自动带上其依赖闭包并高亮；保存时服务端仍会校验，避免「保存成功但导出失败」。
@@ -81,8 +81,8 @@ cargo run -- config.toml
    （手动切换、自动选择、香港/新加坡/日本/美国/台湾/韩国/英国/德国节点、
    Google服务、AI、奈飞、Steam商店、Steam下载、Telegram、Disney+、Spotify、TikTok、GitHub、
    Reddit、Apple、游戏加速、广告拦截、国内网站、漏网之鱼）、
-   **28 个常见地区别名**，以及 **184 条默认路由规则**
-   （55 条 override + 128 条 normal + 1 条 final）：
+   **28 个常见地区别名**，以及 **198 条默认路由规则**
+   （69 条 override + 128 条 normal + 1 条 final）：
    Google 相关域名走 **Google服务**（组内包含 8 个地区组 + 自动选择，**默认选中美国节点**），
    **AI**（48 条，覆盖 OpenAI / Claude / Gemini / Copilot / Cursor / Grok 等）、
    奈飞 / Telegram / Disney+ / Spotify / TikTok / GitHub / Reddit（4 条）/

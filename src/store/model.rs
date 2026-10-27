@@ -1004,6 +1004,30 @@ pub fn default_rules() -> Vec<RuleDef> {
         rule.section = RuleSection::Override;
         rules.push(rule);
     }
+    // 私有 / 保留地址段走国内网站（默认 DIRECT）：局域网、回环、链路本地、CGNAT、
+    // 组播等地址在代理侧不可达，若不显式拦截就会落到 final 的 MATCH 上被送进代理组。
+    // no-resolve 必须写在 target **之后**（AGENTS.md §3.7），否则会被当成目标。
+    for (id, payload) in [
+        ("r-lan-01", "0.0.0.0/8"),
+        ("r-lan-02", "10.0.0.0/8"),
+        ("r-lan-03", "100.64.0.0/10"),
+        ("r-lan-04", "127.0.0.0/8"),
+        ("r-lan-05", "169.254.0.0/16"),
+        ("r-lan-06", "172.16.0.0/12"),
+        ("r-lan-07", "192.0.0.0/24"),
+        ("r-lan-08", "192.0.2.0/24"),
+        ("r-lan-09", "192.168.0.0/16"),
+        ("r-lan-10", "192.88.99.0/24"),
+        ("r-lan-11", "198.18.0.0/15"),
+        ("r-lan-12", "198.51.100.0/24"),
+        ("r-lan-13", "203.0.113.0/24"),
+        ("r-lan-14", "224.0.0.0/3"),
+    ] {
+        let mut rule = rule(id, "IP-CIDR", payload, "国内网站");
+        rule.section = RuleSection::Override;
+        rule.params = vec!["no-resolve".to_string()];
+        rules.push(rule);
+    }
     // Steam 下载走 override，优先于 Steam商店 的普通规则；命中内容/CDN 域名时直连。
     for (id, tp, payload) in [
         ("r-steam-dl-content", "DOMAIN-SUFFIX", "steamcontent.com"),
@@ -1362,7 +1386,8 @@ mod tests {
             .iter()
             .filter(|r| r.section == RuleSection::Override)
             .collect();
-        assert_eq!(ads.len(), 55);
+        // 23 广告 + 41 国内（27 域名/GEOIP + 14 私有地址段）+ 5 Steam下载。
+        assert_eq!(ads.len(), 69);
         assert_eq!(
             ads.iter()
                 .filter(|r| r.target.as_deref() == Some("广告拦截"))
@@ -1373,7 +1398,19 @@ mod tests {
             ads.iter()
                 .filter(|r| r.target.as_deref() == Some("国内网站"))
                 .count(),
-            27
+            41,
+            "国内网站应含 27 条域名/GEOIP 规则 + 14 条私有地址段"
+        );
+        assert_eq!(
+            ads.iter().filter(|r| r.rule_type() == "IP-CIDR").count(),
+            14,
+            "私有地址段必须走 override 段，否则会落到 final 的 MATCH 进代理组"
+        );
+        assert!(
+            ads.iter()
+                .filter(|r| r.rule_type() == "IP-CIDR")
+                .all(|r| r.params == ["no-resolve"]),
+            "私有地址段必须带 no-resolve，避免为每个请求做 DNS 解析"
         );
         assert_eq!(
             ads.iter()
@@ -1381,7 +1418,7 @@ mod tests {
                 .count(),
             5
         );
-        assert_eq!(store.rules.len(), 184);
+        assert_eq!(store.rules.len(), 198);
         let finals: Vec<&RuleDef> = store
             .rules
             .iter()
