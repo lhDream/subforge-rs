@@ -63,11 +63,11 @@
   --ui-bg-disabled: #f1f5f9;
   --ui-border-disabled: #cbd5e1;
 
-  /* 1.6 焦点环：2px 外描边 + 2px 间距，跨背景必须可见 */
-  --ui-focus-ring-color: var(--ui-brand);
-  --ui-focus-ring-color-inverse: #ffffff; /* 深色/图片背景上的双色焦点环 */
-  --ui-focus-ring-width: 2px;
-  --ui-focus-ring-offset: 2px;
+  /* 1.6 焦点环：与 frost 组件规则一致，3px 外描边 + 4px 间距，跨背景必须可见 */
+  --ui-focus-ring-color: var(--focus);
+  --ui-focus-ring-color-inverse: var(--accent-text); /* 深色/强调色背景上的反向焦点环 */
+  --ui-focus-ring-width: 3px;
+  --ui-focus-ring-offset: 4px;
 
   /* ---------------------------------------------------------------------
    * 2. 字体与文字
@@ -99,25 +99,29 @@
   --ui-line-height-reading: 1.7;    /* 文档、说明和长内容 */
 
   /* ---------------------------------------------------------------------
-   * 3. 间距（4px 基础单位）
+   * 3. 间距（规范 §6：只允许 4、8、12、16、24、32、48px 七档）
+   *
+   * 20 / 40 / 64px 不在尺度内，已移除。表单字段间距改用 16px、区块之间用
+   * 24px、区块上下限用 32px，均落在允许档位。
    * ------------------------------------------------------------------- */
   --ui-space-0: 0;
   --ui-space-1: 4px;                /* 控件与帮助 / 错误文字 */
   --ui-space-2: 8px;                /* 图标与文字、同组按钮、标签与控件 */
   --ui-space-3: 12px;
-  --ui-space-4: 16px;               /* 窄屏卡片内边距、手机页面留白 */
-  --ui-space-5: 20px;               /* 表单字段之间 */
-  --ui-space-6: 24px;               /* 卡片内边距、平板页面留白、区块之间下限 */
+  --ui-space-4: 16px;               /* 表单字段之间、窄屏卡片内边距、手机页面留白 */
+  --ui-space-6: 24px;               /* 卡片内边距、平板页面留白、区块之间 */
   --ui-space-8: 32px;               /* 区块之间上限、桌面页面留白 */
-  --ui-space-10: 40px;
   --ui-space-12: 48px;
-  --ui-space-16: 64px;
 
   /* ---------------------------------------------------------------------
    * 4. 尺寸与密度
    * ------------------------------------------------------------------- */
-  --ui-control-height: 44px;        /* 默认按钮 / 输入框 / 选择器最小高度 */
-  --ui-control-height-compact: 36px;/* 高密度桌面工具区，需单独评估触屏与键盘 */
+  /* 控件高度（规范 §8：默认 48px、紧凑 44px、大号 56px）。
+     数值与 frost 的 --control-height 系列一致，但那些变量只定义在
+     [data-frost-root] 作用域内，:root 引用不到，因此在变量层直接落值。 */
+  --ui-control-height: 48px;        /* 默认按钮 / 输入框 / 选择器最小高度 */
+  --ui-control-height-compact: 44px;/* 紧凑规格，仍满足 44px 触控目标 */
+  --ui-control-height-lg: 56px;     /* 大号控件 */
   --ui-touch-target: 44px;          /* 常规触控目标 */
   --ui-icon-sm: 16px;
   --ui-icon-md: 20px;

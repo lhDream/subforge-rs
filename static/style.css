@@ -121,7 +121,7 @@ pre {
 
 ul.tight {
   margin: var(--ui-space-1) 0;
-  padding-left: var(--ui-space-5);
+  padding-left: var(--ui-space-4);
 }
 
 ul.tight li {
@@ -167,7 +167,7 @@ ul.tight li {
 .skip-link {
   position: absolute;
   left: var(--ui-space-4);
-  top: calc(-1 * var(--ui-space-16));
+  top: calc(-1 * var(--ui-space-12));
   z-index: var(--ui-z-toast);
   padding: var(--ui-space-2) var(--ui-space-4);
   background: var(--ui-bg-surface);
@@ -204,7 +204,7 @@ ul.tight li {
   width: 100%;
   max-width: var(--ui-content-max-width);
   margin-inline: auto;
-  padding: var(--ui-space-3) var(--ui-space-5);
+  padding: var(--ui-space-3) var(--ui-space-4);
   border: 1px solid var(--ui-border-subtle);
   border-radius: var(--ui-radius-card);
   background: var(--ui-bg-surface);
@@ -458,14 +458,17 @@ dialog.modal {
 
 /* ---------------------------------------------------------------- 按钮 */
 
+/* 主按钮。`.button` 是规范 §8 要求保留的兼容接口，`.btn` 是业务模板在用的
+   同名别名，两者共享同一套语义变量与状态，避免出现第二套按钮体系。 */
 button,
-.btn {
+.btn,
+.button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--ui-space-2);
   min-height: var(--ui-control-height);
-  padding: var(--ui-space-2) var(--ui-space-5);
+  padding: var(--ui-space-2) var(--ui-space-4);
   border: 1px solid var(--ui-brand);
   border-radius: var(--ui-radius-control);
   /* 主按钮：半透明 --button-bg，共享外层玻璃背景效果，不叠加模糊（AGENTS.md §7） */
@@ -496,50 +499,72 @@ button:active,
   box-shadow: var(--shadow-selected);
 }
 
-/* 次要操作：半透明 --control-bg 描边按钮（AGENTS.md §7） */
+/* 次要操作：半透明 --control-bg 描边按钮（AGENTS.md §7）。
+   `.ghost` 是业务既有类名，`.button--secondary` 是规范 §8 的接口名。 */
 button.ghost,
-.btn.ghost {
+.btn.ghost,
+.button--secondary {
   background: var(--ui-control-bg);
   border-color: var(--ui-border-control);
   color: var(--ui-text-primary);
 }
 
 button.ghost:hover,
-.btn.ghost:hover {
+.btn.ghost:hover,
+.button--secondary:hover {
   background: var(--surface-soft);
   border-color: var(--ui-brand);
   color: var(--ui-text-primary);
 }
 
 button.ghost:active,
-.btn.ghost:active {
+.btn.ghost:active,
+.button--secondary:active {
   background: var(--surface-soft);
+}
+
+/* 幽灵按钮：透明底，仅悬停时出现轻背景（规范 §8） */
+.button--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ui-text-primary);
+}
+
+.button--ghost:hover {
+  background: var(--ui-control-bg);
+  border-color: var(--ui-border-subtle);
+  color: var(--ui-text-primary);
 }
 
 /* 危险操作：独立配色，与普通操作可区分；同样使用半透明填充 */
 button.danger,
-.btn.danger {
+.btn.danger,
+.button--danger {
   background: var(--ui-control-bg);
   border-color: var(--ui-text-danger);
   color: var(--ui-text-danger);
 }
 
 button.danger:hover,
-.btn.danger:hover {
+.btn.danger:hover,
+.button--danger:hover {
   background: var(--ui-bg-danger);
   border-color: var(--ui-text-danger);
   color: var(--ui-text-danger);
 }
 
 button.small,
-.btn.small {
+.btn.small,
+.button--sm {
   min-height: var(--ui-control-height-compact);
   padding: var(--ui-space-1) var(--ui-space-3);
   font-size: var(--ui-font-size-caption);
 }
 
 button:disabled,
-.btn[aria-disabled="true"] {
+.btn[aria-disabled="true"],
+.button:disabled,
+.button[aria-disabled="true"] {
   background: var(--ui-bg-disabled);
   border-color: var(--ui-border-disabled);
   color: var(--ui-text-disabled);
@@ -614,6 +639,27 @@ fieldset > legend {
 }
 
 /* 字段级错误：文字说明 + 程序关联，不只靠红色边框（规范 §7.1） */
+/* 状态信息容器（规范 §8 要求保留的兼容接口）。
+   与业务既有的 .hint / .field-error 共用同一套语义变量，只是类名不同；
+   状态必须在文字中写明「错误 / 成功」，不能只靠颜色。 */
+.status {
+  margin: 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.status--success {
+  color: var(--ui-text-success);
+  font-weight: var(--ui-font-weight-medium);
+}
+
+.status--error {
+  color: var(--ui-text-danger);
+  font-weight: var(--ui-font-weight-medium);
+}
+
 .field-error {
   margin: var(--ui-space-1) 0 0;
   color: var(--ui-text-danger);
@@ -632,13 +678,19 @@ fieldset > legend {
   font-weight: var(--ui-font-weight-semibold);
 }
 
+/* 输入框 / 选择框 / 文本域统一外观。
+   `.control` 是规范 §8 要求保留的兼容接口：模板里已按
+   `.control-shell > .control` 包裹，这里保证该类名在 root 外也有完整样式。 */
 input[type="text"],
 input[type="number"],
 input[type="password"],
 input[type="url"],
 input[type="search"],
+input[type="email"],
+input[type="tel"],
 select,
-textarea {
+textarea,
+.control {
   width: 100%;
   min-height: var(--ui-control-height);
   padding: var(--ui-space-2) var(--ui-space-3);
@@ -653,6 +705,13 @@ textarea {
   transition:
     border-color var(--ui-duration-button) var(--ui-ease-standard),
     background-color var(--ui-duration-button) var(--ui-ease-standard);
+}
+
+/* 流光外壳内的控件由 frost 接管边框与背景，这里只让高度跟随外壳 */
+.control-shell > .control {
+  min-height: calc(var(--ui-control-height) - 2px);
+  border: 0;
+  background: transparent;
 }
 
 input:hover:not(:disabled),
@@ -722,11 +781,11 @@ input[type="radio"] {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--ui-grid-min-column), 1fr));
-  gap: var(--ui-space-5);
+  gap: var(--ui-space-4);
 }
 
 .form-grid + .form-grid {
-  margin-top: var(--ui-space-5);
+  margin-top: var(--ui-space-4);
 }
 
 /* 字段网格之后的整体说明（如「标 * 的为必填」）与网格拉开距离 */
@@ -734,7 +793,7 @@ input[type="radio"] {
 .form-grid + fieldset,
 fieldset + .hint,
 .form-actions + .hint {
-  margin-top: var(--ui-space-5);
+  margin-top: var(--ui-space-4);
 }
 
 .form-actions {
@@ -805,7 +864,7 @@ fieldset + .hint,
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--ui-grid-min-column), 1fr));
-  gap: var(--ui-space-5);
+  gap: var(--ui-space-4);
 }
 
 /* 实体列表：一个实体一张卡，卡内用 details 收纳编辑表单 */
@@ -845,7 +904,7 @@ fieldset + .hint,
 }
 
 .entity[open] > summary {
-  margin-bottom: var(--ui-space-5);
+  margin-bottom: var(--ui-space-4);
   padding-bottom: var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border-subtle);
 }
@@ -1075,7 +1134,7 @@ td.cell-actions .row-actions {
   transform: translateX(-50%);
   z-index: var(--ui-z-toast);
   max-width: min(90vw, 32rem);
-  padding: var(--ui-space-3) var(--ui-space-5);
+  padding: var(--ui-space-3) var(--ui-space-4);
   border: 1px solid var(--ui-border-success);
   border-radius: var(--ui-radius-pill);
   background: var(--ui-bg-success);
@@ -1447,11 +1506,6 @@ dialog.modal[open]:not([data-modal]) [data-dialog-close] {
   flex-direction: column;
   min-width: 0;
   gap: 0;
-}
-
-/* 流光外壳内的原生控件：去掉 frost 默认 padding，避免与业务尺寸叠加 */
-:where([data-frost-root]) .control-shell > .control {
-  min-height: calc(var(--ui-control-height) - 2px);
 }
 
 /* 业务表单里的裸控件（未包 shell 的隐藏域等）不受影响 */
