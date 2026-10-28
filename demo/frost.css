@@ -1,0 +1,535 @@
+:root {
+  color-scheme: light;
+  --bg: #F3F6FB;
+  --surface: #FFFFFF;
+  --surface-soft: rgb(233 239 248 / 65%);
+  --control-bg: rgb(255 255 255 / 38%);
+  --button-bg: rgb(29 78 216 / 92%);
+  --text: #172033;
+  --text-muted: #4B5870;
+  --accent: #1D4ED8;
+  --accent-text: #FFFFFF;
+  --glass-bg: rgb(255 255 255 / 52%);
+  --glass-shine: rgb(255 255 255 / 28%);
+  --border: rgb(71 85 105 / 18%);
+  --glass-border: rgb(255 255 255 / 78%);
+  --control-border: #536278;
+  --focus: #1D4ED8;
+  --success: #166534;
+  --danger: #B42318;
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / 80%), inset 1px 0 0 rgb(255 255 255 / 36%), 0 24px 48px rgb(30 64 100 / 15%);
+  --shadow-hover: 0 0 0 3px var(--border);
+  --shadow-selected: inset 0 0 0 1px var(--accent);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  --glass-blur: 16px;
+  --motion-fast: 160ms;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0B1120;
+  --surface: #0F172A;
+  --surface-soft: rgb(23 37 61 / 65%);
+  --control-bg: rgb(15 23 42 / 40%);
+  --button-bg: rgb(147 197 253 / 92%);
+  --text: #F1F5F9;
+  --text-muted: #B8C4D8;
+  --accent: #93C5FD;
+  --accent-text: #0B1120;
+  --glass-bg: rgb(15 23 42 / 48%);
+  --glass-shine: rgb(170 206 255 / 8%);
+  --border: rgb(184 196 216 / 20%);
+  --glass-border: rgb(184 196 216 / 24%);
+  --control-border: #B8C4D8;
+  --focus: #BFDBFE;
+  --success: #86EFAC;
+  --danger: #FDA4AF;
+  --shadow-card: inset 0 1px 0 rgb(210 229 255 / 30%), inset 1px 0 0 rgb(210 229 255 / 10%), 0 24px 48px rgb(0 0 0 / 28%);
+}
+@media (prefers-color-scheme: dark) {
+:root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #0B1120;
+    --surface: #0F172A;
+    --surface-soft: rgb(23 37 61 / 65%);
+    --control-bg: rgb(15 23 42 / 40%);
+    --button-bg: rgb(147 197 253 / 92%);
+    --text: #F1F5F9;
+    --text-muted: #B8C4D8;
+    --accent: #93C5FD;
+    --accent-text: #0B1120;
+    --glass-bg: rgb(15 23 42 / 48%);
+    --glass-shine: rgb(170 206 255 / 8%);
+    --border: rgb(184 196 216 / 20%);
+    --glass-border: rgb(184 196 216 / 24%);
+    --control-border: #B8C4D8;
+    --focus: #BFDBFE;
+    --success: #86EFAC;
+    --danger: #FDA4AF;
+    --shadow-card: inset 0 1px 0 rgb(210 229 255 / 30%), inset 1px 0 0 rgb(210 229 255 / 10%), 0 24px 48px rgb(0 0 0 / 28%);
+}
+}
+
+:where([data-frost-root]) { font-family: var(--font-sans); color: var(--text); line-height: 1.65; overflow-wrap: anywhere; }
+:where([data-frost-root]), :where([data-frost-root]) *, :where([data-frost-root]) *::before, :where([data-frost-root]) *::after { box-sizing: border-box; }
+@media (max-width: 640px) { :root { --glass-blur: 10px; } }
+@media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; } }
+@media (forced-colors: active) {
+  :root, :root[data-theme], :root:not([data-theme]) { --bg: Canvas; --surface: Canvas; --surface-soft: Canvas; --text: CanvasText; --text-muted: CanvasText; --accent: Highlight; --accent-text: HighlightText; --border: CanvasText; --control-border: ButtonText; --focus: Highlight; --success: CanvasText; --danger: CanvasText; --shadow-card: none; --shadow-hover: none; --shadow-selected: none; --control-bg: Canvas; --button-bg: Highlight; }
+}
+
+/* FROST components — 原生语义优先，所有选择器限定于明确的组件根。 */
+/* 角度由 Frost 在聚焦时更新；普通自定义属性继承到伪元素，不依赖 @property 插值。 */
+:where([data-frost-root]) {
+  --flow-start: #1D4ED8;
+  --flow-peak: #006872;
+  --flow-end: #6D28D9;
+  --flow-rose: #AD1457;
+  --flow-halo: rgb(31 107 194 / 16%);
+  --flow-strength: 1;
+  --flow-rest-strength: 1;
+  --flow-width: 2px;
+  --flow-duration: 2.8s;
+  --control-focus-mark: var(--control-border);
+  --control-focus-length: 48px;
+  --control-height: 48px;
+  --control-height-sm: 44px;
+  --control-height-lg: 56px;
+  --warning: #80500B;
+  --danger-tint: rgb(180 35 24 / 8%);
+  --success-tint: rgb(22 101 52 / 8%);
+  --warning-tint: rgb(128 80 11 / 8%);
+  --scrim: rgb(11 17 32 / 38%);
+  --disabled-opacity: .62;
+  --shadow-flow: 0 0 12px -4px var(--flow-halo);
+  --shadow-float: var(--shadow-card);
+  --layer-menu: 100;
+  --layer-toast: 110;
+}
+:root[data-theme="dark"] :where([data-frost-root]) {
+  --flow-start: #A5D4FF;
+  --flow-peak: #9EE8CE;
+  --flow-end: #DCC6FF;
+  --flow-rose: #FFC0DE;
+  --flow-halo: rgb(157 172 255 / 14%);
+  --warning: #FAD68A;
+  --danger-tint: rgb(253 164 175 / 9%);
+  --success-tint: rgb(134 239 172 / 9%);
+  --warning-tint: rgb(250 214 138 / 9%);
+  --scrim: rgb(2 6 16 / 62%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) :where([data-frost-root]) {
+    --flow-start: #A5D4FF;
+    --flow-peak: #9EE8CE;
+    --flow-end: #DCC6FF;
+    --flow-rose: #FFC0DE;
+    --flow-halo: rgb(157 172 255 / 14%);
+    --warning: #FAD68A;
+    --danger-tint: rgb(253 164 175 / 9%);
+    --success-tint: rgb(134 239 172 / 9%);
+    --warning-tint: rgb(250 214 138 / 9%);
+    --scrim: rgb(2 6 16 / 62%);
+  }
+}
+:where([data-frost-root]) [hidden] { display: none !important; }
+:where([data-frost-root]) :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+:where([data-frost-root]) :where(button, input, select, textarea) { font: inherit; }
+:where([data-frost-root]) :where(button, input, select, textarea, a) { -webkit-tap-highlight-color: transparent; }
+:where([data-frost-root]) button { cursor: pointer; }
+:where([data-frost-root]) :where(button, input, select, textarea):disabled { cursor: not-allowed; }
+:where([data-frost-root]) a { color: var(--accent); text-underline-offset: 4px; }
+
+/* 唯一材质为毛玻璃；不支持滤镜时的背景是兼容兜底，不是可选主题。 */
+:where([data-frost-root]) .glass {
+  --text-muted: var(--text);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  :where([data-frost-root]) .glass {
+    background: linear-gradient(135deg, var(--glass-shine), transparent 70%), var(--glass-bg);
+    border-color: var(--glass-border);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+  }
+}
+/* 防止误嵌套造成两层背景模糊。浮层必须移到独立 portal。 */
+:where([data-frost-root]) .glass .glass {
+  background: var(--control-bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+:where([data-frost-root]).frost-portal {
+  position: static;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 按钮：44px 最小触达区域；忙碌状态仍提供可读文字。 */
+:where([data-frost-root]) .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  max-width: 100%;
+  padding: var(--space-2) var(--space-4);
+  color: var(--accent-text);
+  background: var(--button-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+:where([data-frost-root]) .button:hover:not(:disabled):not([aria-disabled="true"]) { box-shadow: var(--shadow-hover); }
+:where([data-frost-root]) .button:active:not(:disabled):not([aria-disabled="true"]) { box-shadow: var(--shadow-selected); }
+:where([data-frost-root]) .button--secondary { color: var(--text); background: var(--control-bg); border-color: var(--control-border); }
+:where([data-frost-root]) .button--ghost { color: var(--text); background: transparent; border-color: transparent; }
+:where([data-frost-root]) .button--ghost:hover:not(:disabled) { background: var(--control-bg); border-color: var(--border); }
+:where([data-frost-root]) .button--danger { color: var(--danger); background: var(--danger-tint); border-color: var(--text); }
+:where([data-frost-root]) .button--icon { flex: none; min-width: var(--control-height); padding-inline: var(--space-3); }
+:where([data-frost-root]) .button--sm { min-height: var(--control-height-sm); padding-inline: var(--space-3); font-size: .875rem; }
+:where([data-frost-root]) .button--lg { min-height: var(--control-height-lg); padding-inline: var(--space-6); }
+:where([data-frost-root]) .button[aria-pressed="true"] { color: var(--accent); background: var(--control-bg); box-shadow: var(--shadow-selected); border-color: var(--accent); }
+:where([data-frost-root]) .button[aria-busy="true"] { cursor: progress; border-style: dashed; }
+:where([data-frost-root]) .button:disabled,
+:where([data-frost-root]) .button[aria-disabled="true"] {
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  border-color: var(--control-border);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 表单：流光只属于外壳边框，原生控件保持选择、填充与缩放能力。 */
+:where([data-frost-root]) .field { display: grid; min-width: 0; gap: var(--space-2); }
+:where([data-frost-root]) .field > :where(label, legend) { color: var(--text); font-weight: 650; }
+:where([data-frost-root]) .field > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+:where([data-frost-root]) .field-hint,
+:where([data-frost-root]) .status { margin: 0; font-size: .875rem; color: var(--text-muted); overflow-wrap: anywhere; }
+:where([data-frost-root]) .status--success { color: var(--success); }
+:where([data-frost-root]) .status--error { color: var(--danger); }
+:where([data-frost-root]) .control {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: var(--space-3);
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  line-height: 1.5;
+}
+:where([data-frost-root]) .control::placeholder { color: var(--text-muted); opacity: 1; }
+:where([data-frost-root]) .control option { color: var(--text); background: var(--surface); }
+:where([data-frost-root]) textarea.control { min-height: 128px; resize: vertical; }
+:where([data-frost-root]) .control[aria-invalid="true"] { border-color: var(--text); border-style: dashed; }
+:where([data-frost-root]) .control:disabled { color: var(--text-muted); background: var(--surface-soft); }
+:where([data-frost-root]) .control[readonly] { background: var(--surface-soft); cursor: text; }
+:where([data-frost-root]) .control-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: var(--control-height);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+  box-shadow: var(--shadow-flow), inset 0 1px 0 var(--glass-shine);
+}
+:where([data-frost-root]) .control-shell > .control {
+  position: relative;
+  flex: 1;
+  align-self: stretch;
+  width: 0;
+  border: 0;
+  background: transparent;
+  /* 不设置 overflow:hidden，以保留文本域的 resize 手柄和键盘焦点。 */
+}
+:where([data-frost-root]) .control-shell > select.control { padding-right: var(--space-8); }
+:where([data-frost-root]) .control-prefix,
+:where([data-frost-root]) .control-suffix { flex: none; color: var(--text-muted); font-size: .875rem; }
+:where([data-frost-root]) .control-prefix { padding-left: var(--space-3); }
+:where([data-frost-root]) .control-suffix { padding-right: var(--space-3); }
+:where([data-frost-root]) .control-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: 1px;
+  padding: var(--space-2);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  font-size: .8125rem;
+}
+:where([data-frost-root]) .control-action:hover:not(:disabled) { color: var(--text); background: var(--surface-soft); }
+:where([data-frost-root]) .control-action:disabled { color: var(--text-muted); }
+:where([data-frost-root]) .control-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -5px;
+}
+/* 底部短标记表示输入区焦点，不再额外画一圈外框。
+   标记不依赖运动；只读/错误同样可见，操作按钮保留自己的轮廓。 */
+@supports selector(.control-shell:has(> .control:focus-visible)) {
+  :where([data-frost-root]) .control-shell:has(> .control:focus-visible)::after {
+    content: "";
+    position: absolute;
+    inset-block-end: -6px;
+    inset-inline: 12px;
+    width: min(var(--control-focus-length), calc(100% - 24px));
+    height: 3px;
+    margin-inline: auto;
+    border-radius: var(--radius-pill);
+    background: var(--control-focus-mark);
+    pointer-events: none;
+  }
+  :where([data-frost-root]) .control-shell > .control:focus-visible { outline: none; }
+}
+/* 完整 2px 渐变环覆盖原边界；中心镂空，无透明缺口或第二层深色底边。
+   默认角度为零；Frost 仅在聚焦时更新继承角度，失焦保持最后一帧。 */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  @supports (background: conic-gradient(from 0deg in srgb, currentColor, currentColor)) and selector(:has(*)) {
+    :where([data-frost-root]) .control-shell:where(:not(:has(.control:disabled, .control[readonly], .control[aria-invalid="true"]))) {
+      border-color: transparent;
+    }
+    :where([data-frost-root]) .control-shell::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      inset: -1px;
+      padding: var(--flow-width);
+      border-radius: inherit;
+      background: conic-gradient(from var(--frost-flow-angle, 0deg) in srgb, var(--flow-start) 0deg, var(--flow-peak) 90deg, var(--flow-end) 180deg, var(--flow-rose) 270deg, var(--flow-start) 360deg);
+      opacity: var(--flow-rest-strength);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    :where([data-frost-root]) .control-shell:focus-within:where(:not(:has(.control:disabled, .control[readonly], .control[aria-invalid="true"])))::before {
+      opacity: var(--flow-strength);
+    }
+  }
+}
+/* 非编辑状态保留自己的普通边界，渐变不覆盖错误或禁用状态。 */
+@supports selector(:has(*)) {
+  :where([data-frost-root]) .control-shell:has(.control[aria-invalid="true"]) { border-color: var(--text); border-style: dashed; box-shadow: none; }
+  :where([data-frost-root]) .control-shell:has(.control:disabled, .control[readonly]) { background: var(--surface-soft); box-shadow: none; }
+  :where([data-frost-root]) .control-shell:has(.control[aria-invalid="true"], .control:disabled, .control[readonly])::before { display: none; }
+}
+@supports not selector(:has(*)) {
+  :where([data-frost-root]) .control-shell > .control[aria-invalid="true"] { border: 1px dashed var(--text); }
+}
+
+/* 原生选择与开关：文字 label 和控件共同构成至少 44px 点击区域。 */
+:where([data-frost-root]) .choice,
+:where([data-frost-root]) .switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  max-width: 100%;
+  color: var(--text);
+  line-height: 1.5;
+  cursor: pointer;
+}
+:where([data-frost-root]) .choice :where(input[type="checkbox"], input[type="radio"]) { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+:where([data-frost-root]) :where(.choice, .switch) input:disabled { opacity: var(--disabled-opacity); }
+:where([data-frost-root]) .switch input[role="switch"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  background: var(--surface-soft);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  cursor: inherit;
+}
+:where([data-frost-root]) .switch input[role="switch"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  transition: transform var(--motion-fast) ease;
+}
+:where([data-frost-root]) .switch input[role="switch"]:checked { background: var(--button-bg); border-color: var(--accent); }
+:where([data-frost-root]) .switch input[role="switch"]:checked::before { background: var(--accent-text); transform: translateX(18px); }
+:where([data-frost-root]) .switch:dir(rtl) input[role="switch"]:checked::before { transform: translateX(-18px); }
+:where([data-frost-root]) :where(.choice, .switch):has(input:disabled) { color: var(--text-muted); cursor: not-allowed; }
+
+/* 内容与导航。card 本身不启用背景滤镜，可作为 glass 内的轻表面。 */
+:where([data-frost-root]) .card { min-width: 0; padding: var(--space-6); color: var(--text); border-radius: var(--radius-card); }
+:where([data-frost-root]) .card:not(.glass) { background: var(--control-bg); border: 1px solid var(--border); }
+:where([data-frost-root]) .card > :first-child { margin-top: 0; }
+:where([data-frost-root]) .card > :last-child { margin-bottom: 0; }
+:where([data-frost-root]) .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: .75rem;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+:where([data-frost-root]) .badge--success { color: var(--success); background: var(--success-tint); border-color: var(--success); }
+:where([data-frost-root]) .badge--warning { color: var(--warning); background: var(--warning-tint); border-color: var(--warning); }
+:where([data-frost-root]) .badge--error { color: var(--danger); background: var(--danger-tint); border-color: var(--text); }
+:where([data-frost-root]) :where(.tabs, [data-frost-tabs]) { min-width: 0; }
+:where([data-frost-root]) .tab-list { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--control-bg); }
+:where([data-frost-root]) .tab-list [role="tab"] { flex: 1; min-width: 0; min-height: 44px; padding: var(--space-2) var(--space-3); color: var(--text-muted); border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; line-height: 1.4; overflow-wrap: anywhere; }
+:where([data-frost-root]) .tab-list [role="tab"][aria-selected="true"] { color: var(--text); border-color: var(--control-border); background: var(--control-bg); box-shadow: var(--shadow-selected); font-weight: 650; }
+:where([data-frost-root]) .tab-list [role="tab"]:hover:not(:disabled) { color: var(--text); }
+:where([data-frost-root]) .tab-list [role="tab"]:disabled { cursor: not-allowed; }
+:where([data-frost-root]) .tab-list[aria-orientation="vertical"] { flex-direction: column; align-items: stretch; }
+:where([data-frost-root]) .tab-panel { padding-block: var(--space-6); color: var(--text); }
+:where([data-frost-root]) .tab-panel > :first-child { margin-top: 0; }
+:where([data-frost-root]) .tab-panel > :last-child { margin-bottom: 0; }
+:where([data-frost-root]) .accordion { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--control-bg); }
+:where([data-frost-root]) .accordion + .accordion { margin-top: var(--space-2); }
+:where([data-frost-root]) .accordion summary { min-height: var(--control-height); padding: var(--space-3) var(--space-4); color: var(--text); font-weight: 600; cursor: pointer; }
+:where([data-frost-root]) .accordion summary::marker { color: var(--accent); }
+:where([data-frost-root]) .accordion[open] summary { border-bottom: 1px solid var(--border); }
+:where([data-frost-root]) .accordion-content { padding: var(--space-4); }
+:where([data-frost-root]) .accordion-content > :first-child { margin-top: 0; }
+:where([data-frost-root]) .accordion-content > :last-child { margin-bottom: 0; }
+
+/* 独立浮层，不继承展示卡片的滤镜叠层。 */
+:where([data-frost-root]) .menu {
+  position: fixed;
+  z-index: var(--layer-menu);
+  min-width: 200px;
+  max-width: calc(100vw - var(--space-8));
+  max-height: calc(100dvh - var(--space-8));
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-2);
+  box-shadow: var(--shadow-float);
+}
+:where([data-frost-root]) .menu [role="menuitem"] { display: flex; align-items: center; justify-content: flex-start; gap: var(--space-2); width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: var(--radius-control); text-align: start; text-decoration: none; overflow-wrap: anywhere; }
+:where([data-frost-root]) .menu [role="menuitem"]:where(:hover, :focus-visible) { color: var(--text); background: var(--control-bg); border-color: var(--control-border); }
+:where([data-frost-root]) .menu [role="menuitem"][aria-disabled="true"],
+:where([data-frost-root]) .menu [role="menuitem"]:disabled { color: var(--text-muted); cursor: not-allowed; }
+:where([data-frost-root]) .menu [role="separator"] { height: 1px; margin: var(--space-2); border: 0; background: var(--border); }
+:where([data-frost-root]) .alert { display: flex; align-items: start; gap: var(--space-3); padding: var(--space-4); color: var(--text); background: var(--control-bg); border: 1px solid var(--control-border); border-radius: var(--radius-control); overflow-wrap: anywhere; }
+:where([data-frost-root]) .alert--success { background: var(--success-tint); border-inline-start: 3px solid var(--success); }
+:where([data-frost-root]) .alert--warning { background: var(--warning-tint); border-inline-start: 3px solid var(--warning); }
+:where([data-frost-root]) .alert--error { background: var(--danger-tint); border-inline-start: 3px dashed var(--text); }
+:where([data-frost-root]) .alert-title { display: block; margin-bottom: var(--space-1); font-weight: 650; }
+:where([data-frost-root]) .alert p { margin: 0; }
+:where([data-frost-root]) dialog.dialog {
+  width: min(520px, calc(100% - var(--space-8)));
+  max-width: none;
+  max-height: calc(100dvh - var(--space-8));
+  margin: auto;
+  padding: var(--space-6);
+  overflow: auto;
+  color: var(--text);
+}
+:where([data-frost-root]) dialog.dialog::backdrop { background: var(--scrim); }
+:where([data-frost-root]) .dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
+:where([data-frost-root]) .dialog-head :where(h2, h3) { margin: 0; font-size: 1.375rem; line-height: 1.4; }
+:where([data-frost-root]) .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-6); }
+:where([data-frost-root]) .toast-stack { position: fixed; z-index: var(--layer-toast); inset-inline-end: var(--space-6); inset-block-end: var(--space-6); display: grid; gap: var(--space-3); width: min(400px, calc(100vw - var(--space-8))); max-height: calc(100dvh - var(--space-8)); overflow-y: auto; padding: var(--space-1); pointer-events: none; }
+:where([data-frost-root]) .toast { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-2); padding: var(--space-4); pointer-events: auto; }
+:where([data-frost-root]) .toast-message { align-self: center; margin: 0; color: var(--text); overflow-wrap: anywhere; }
+:where([data-frost-root]) .toast-actions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+:where([data-frost-root]) .toast-close { display: inline-flex; justify-content: center; align-items: center; min-width: 44px; min-height: 44px; margin: calc(-1 * var(--space-2)); padding: var(--space-2); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: var(--radius-control); }
+:where([data-frost-root]) .toast-close:hover { background: var(--control-bg); border-color: var(--border); }
+:where([data-frost-root]) .toast--error,
+:where([data-frost-root]) .toast[data-tone="error"] { border-inline-start: 3px dashed var(--text); }
+:where([data-frost-root]) .toast--success,
+:where([data-frost-root]) .toast[data-tone="success"] { border-inline-start: 3px solid var(--success); }
+
+/* 加载与空状态依靠文本表达含义，动画只作为可删除的装饰。 */
+:where([data-frost-root]) .progress { display: block; width: 100%; height: 8px; overflow: hidden; appearance: none; -webkit-appearance: none; color: var(--accent); background: var(--surface-soft); border: 1px solid var(--control-border); border-radius: var(--radius-pill); accent-color: var(--accent); }
+:where([data-frost-root]) .progress::-webkit-progress-bar { background: var(--surface-soft); }
+:where([data-frost-root]) .progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-pill); }
+:where([data-frost-root]) .progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-pill); }
+:where([data-frost-root]) .skeleton { display: block; min-height: 16px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius-control); }
+:where([data-frost-root]) .skeleton + .skeleton { margin-top: var(--space-3); }
+:where([data-frost-root]) .skeleton--short { max-width: 62%; }
+:where([data-frost-root]) .skeleton--heading { min-height: 24px; max-width: 45%; }
+:where([data-frost-root]) .empty { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); color: var(--text-muted); text-align: center; }
+:where([data-frost-root]) .empty :where(h3, p) { max-width: 45ch; margin: 0; }
+:where([data-frost-root]) .empty h3 { color: var(--text); font-size: 1.125rem; }
+:where([data-frost-root]) .empty-icon { display: grid; place-items: center; width: 48px; height: 48px; color: var(--accent); background: var(--control-bg); border: 1px solid var(--border); border-radius: var(--radius-card); }
+:where([data-frost-root]) .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* 透明玻璃上的小字使用高对比主文字，语义仍由文案、图形及边界呈现。 */
+:where([data-frost-root]) .glass :where(.status--success, .status--error, .button--danger, .badge--success, .badge--warning, .badge--error) { color: var(--text); }
+:where([data-frost-root]) .glass a:not(.button),
+:where([data-frost-root]) .glass .button[aria-pressed="true"] { color: var(--text); }
+
+@media (max-width: 640px) {
+  :where([data-frost-root]) .card { padding: var(--space-4); }
+  :where([data-frost-root]) .toast-stack { inset-inline-end: var(--space-4); inset-block-end: var(--space-4); }
+  :where([data-frost-root]) dialog.dialog { padding: var(--space-4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 角度由 JS 停止更新；CSS 单独使用时边框也始终静态。 */
+  :where([data-frost-root]) .button,
+  :where([data-frost-root]) .switch input[role="switch"]::before { transition: none; }
+}
+@media (forced-colors: active) {
+  :where([data-frost-root]),
+  :root[data-theme] :where([data-frost-root]),
+  :root:not([data-theme]) :where([data-frost-root]) { --warning: CanvasText; --danger-tint: Canvas; --success-tint: Canvas; --warning-tint: Canvas; --scrim: Canvas; --flow-halo: transparent; }
+  :where([data-frost-root]) .glass { color: CanvasText; background: Canvas; border-color: CanvasText; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  :where([data-frost-root]) .control-shell { background: Field; border-color: ButtonText; box-shadow: none; }
+  :where([data-frost-root]) .control-shell:has(> .control:focus-visible) { outline: 2px solid Highlight; outline-offset: 3px; }
+  :where([data-frost-root]) .control-action:focus-visible { outline-color: Highlight; }
+  :where([data-frost-root]) .control-shell:has(> .control:focus-visible)::after { display: none; }
+  :where([data-frost-root]) .control-shell::before { display: none; }
+  :where([data-frost-root]) :where(.button, .control, .card, .badge, .alert, .accordion, .tab-list, .skeleton, .progress) { border-color: ButtonText; box-shadow: none; }
+  :where([data-frost-root]) .tab-list [role="tab"][aria-selected="true"] { color: Highlight; border-color: Highlight; border-bottom-width: 3px; }
+  :where([data-frost-root]) .switch input[role="switch"] { appearance: auto; -webkit-appearance: auto; width: 24px; height: 24px; accent-color: auto; }
+  :where([data-frost-root]) .switch input[role="switch"]::before { display: none; }
+  :where([data-frost-root]) .toast { border-width: 2px; }
+}

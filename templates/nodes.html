@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}手动节点{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -32,7 +32,7 @@
       {% if form.scope.is_empty() %}{% include "partials/form_errors.html" %}{% endif %}
       <div class="field">
         <label for="new-node-links">分享链接 <span class="req" aria-hidden="true">*</span></label>
-        <textarea id="new-node-links" name="links" rows="8" required data-autofocus placeholder="ss://...#香港01&#10;vmess://..." aria-describedby="new-node-links-hint{% if form.invalid("", "links") %} new-node-links-error{% endif %}"{% if form.invalid("", "links") %} aria-invalid="true"{% endif %}>{{ form.value("", "links", "") }}</textarea>
+        <div class="control-shell"><textarea class="control" id="new-node-links" name="links" rows="8" required data-autofocus placeholder="ss://...#香港01&#10;vmess://..." aria-describedby="new-node-links-hint{% if form.invalid("", "links") %} new-node-links-error{% endif %}"{% if form.invalid("", "links") %} aria-invalid="true"{% endif %}>{{ form.value("", "links", "") }}</textarea></div>
         <p class="hint" id="new-node-links-hint">每行一条；空行与 <span class="mono">#</span> 开头的行会被忽略。不支持的协议或格式错误会整批拒绝并指出行号。</p>
         {% if form.invalid("", "links") %}<p class="field-error" id="new-node-links-error">{{ form.error("", "links") }}</p>{% endif %}
       </div>

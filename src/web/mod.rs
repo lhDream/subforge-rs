@@ -528,7 +528,10 @@ where
         .layer(axum::middleware::from_fn(static_no_cache))
 }
 
-/// Workers 上没有文件系统：三个静态文件直接内嵌（约 59KB）。
+/// Workers 上没有文件系统：静态文件直接内嵌。
+///
+/// frost.css / frost.js 是 Frost 设计系统的主体（主题变量与首屏主题脚本），
+/// 必须一并内嵌，否则线上会 404，导致主题与毛玻璃全部失效。
 #[cfg(target_arch = "wasm32")]
 fn static_assets<S>(_dir: std::path::PathBuf) -> Router<S>
 where
@@ -546,11 +549,24 @@ where
             }),
         )
         .route(
+            "/static/frost.css",
+            get(|| async { embedded_asset("text/css", include_str!("../../static/frost.css")) }),
+        )
+        .route(
             "/static/app.js",
             get(|| async {
                 embedded_asset(
                     "application/javascript",
                     include_str!("../../static/app.js"),
+                )
+            }),
+        )
+        .route(
+            "/static/frost.js",
+            get(|| async {
+                embedded_asset(
+                    "application/javascript",
+                    include_str!("../../static/frost.js"),
                 )
             }),
         )

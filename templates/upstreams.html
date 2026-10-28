@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}上游订阅{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -28,25 +28,25 @@
       <div class="form-grid">
         <div class="field">
           <label for="new-up-name">名称 <span class="req" aria-hidden="true">*</span></label>
-          <input id="new-up-name" type="text" name="name" required data-autofocus placeholder="机场 A" value="{{ form.value("", "name", "") }}" aria-describedby="new-up-name-hint{% if form.invalid("", "name") %} new-up-name-error{% endif %}"{% if form.invalid("", "name") %} aria-invalid="true"{% endif %}>
+          <div class="control-shell"><input class="control" id="new-up-name" type="text" name="name" required data-autofocus placeholder="机场 A" value="{{ form.value("", "name", "") }}" aria-describedby="new-up-name-hint{% if form.invalid("", "name") %} new-up-name-error{% endif %}"{% if form.invalid("", "name") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-up-name-hint">只用于本页展示，可随时修改。</p>
           {% if form.invalid("", "name") %}<p class="field-error" id="new-up-name-error">{{ form.error("", "name") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-up-id">id</label>
-          <input id="new-up-id" type="text" name="id" placeholder="airport-a" value="{{ form.value("", "id", "") }}" aria-describedby="new-up-id-hint{% if form.invalid("", "id") %} new-up-id-error{% endif %}"{% if form.invalid("", "id") %} aria-invalid="true"{% endif %}>
+          <div class="control-shell"><input class="control" id="new-up-id" type="text" name="id" placeholder="airport-a" value="{{ form.value("", "id", "") }}" aria-describedby="new-up-id-hint{% if form.invalid("", "id") %} new-up-id-error{% endif %}"{% if form.invalid("", "id") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-up-id-hint">留空则按名称自动生成；只允许小写字母、数字与连字符，创建后不可更改。</p>
           {% if form.invalid("", "id") %}<p class="field-error" id="new-up-id-error">{{ form.error("", "id") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-up-url">订阅 URL <span class="req" aria-hidden="true">*</span></label>
-          <input id="new-up-url" type="text" name="url" required placeholder="https://example.com/api/v1/client/subscribe?token=..." value="{{ form.value("", "url", "") }}" aria-describedby="new-up-url-hint{% if form.invalid("", "url") %} new-up-url-error{% endif %}"{% if form.invalid("", "url") %} aria-invalid="true"{% endif %}>
+          <div class="control-shell"><input class="control" id="new-up-url" type="text" name="url" required placeholder="https://example.com/api/v1/client/subscribe?token=..." value="{{ form.value("", "url", "") }}" aria-describedby="new-up-url-hint{% if form.invalid("", "url") %} new-up-url-error{% endif %}"{% if form.invalid("", "url") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-up-url-hint">带 token 的完整地址。请求会带 Mihomo User-Agent，否则机场可能返回分享链接列表。</p>
           {% if form.invalid("", "url") %}<p class="field-error" id="new-up-url-error">{{ form.error("", "url") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-up-note">备注</label>
-          <input id="new-up-note" type="text" name="note" value="{{ form.value("", "note", "") }}">
+          <div class="control-shell"><input class="control" id="new-up-note" type="text" name="note" value="{{ form.value("", "note", "") }}"></div>
         </div>
       </div>
       <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>

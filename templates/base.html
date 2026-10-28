@@ -3,31 +3,79 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>{% block title %}方案{% endblock %} · SubForge.rs</title>
-<link rel="stylesheet" href="/static/style.css?v=20261020-4">
-<script src="/static/app.js?v=20261020-4" defer></script>
+<!-- 先加载 frost.js（不带 async / defer）：在样式之前同步确定首屏主题，避免先展示
+     错误主题再切换（AGENTS.md §6、§12）。它提供 window.Frost 全局，非 ESM。 -->
+<script src="/static/frost.js?v=20261027-6"></script>
+<!-- Frost 设计系统：主题变量定义在 html，组件规则限定在 [data-frost-root] 内。 -->
+<link rel="stylesheet" href="/static/frost.css?v=20261027-6">
+<!-- 项目样式入口（内含 @import "ui-tokens.css"），全部消费 frost 的语义变量。 -->
+<link rel="stylesheet" href="/static/style.css?v=20261027-6">
+<script src="/static/app.js?v=20261027-6" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
+<!-- 顶栏：通栏 sticky 容器，内部是一张与 demo 一致的圆角玻璃卡片（.app-header-inner） -->
 <header class="app-header">
-  <a class="brand" href="/">SubForge.rs</a>
-  <details class="nav-drawer">
-    <summary>菜单</summary>
-    <nav class="app-nav" aria-label="主导航">
-      <a href="/"{% if nav == "profiles" %} aria-current="page"{% endif %}>方案</a>
-      <a href="/upstreams"{% if nav == "upstreams" %} aria-current="page"{% endif %}>上游</a>
-      <a href="/nodes"{% if nav == "nodes" %} aria-current="page"{% endif %}>手动节点</a>
-      <a href="/groups"{% if nav == "groups" %} aria-current="page"{% endif %}>分组</a>
-      <a href="/rules"{% if nav == "rules" %} aria-current="page"{% endif %}>路由规则</a>
-      <a href="/aliases"{% if nav == "aliases" %} aria-current="page"{% endif %}>地区别名</a>
-      <a href="/general"{% if nav == "general" %} aria-current="page"{% endif %}>通用设置</a>
-      <a href="/backups"{% if nav == "backups" %} aria-current="page"{% endif %}>备份</a>
-    </nav>
-  </details>
+  <div class="app-header-inner glass">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 3v4.5a4 4 0 0 0 4 4h8"/><path d="M6 21v-4.5a4 4 0 0 1 4-4h8"/><circle cx="6" cy="3" r="1.7"/><circle cx="6" cy="21" r="1.7"/><circle cx="18" cy="11.5" r="1.7"/></svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">SubForge.rs</span>
+        <span class="brand-sub">CLASH SUBSCRIPTION FORGE</span>
+      </span>
+    </a>
+    <details class="nav-drawer">
+      <summary>菜单</summary>
+      <nav class="app-nav" aria-label="主导航">
+        <a href="/"{% if nav == "profiles" %} aria-current="page"{% endif %}>方案</a>
+        <a href="/upstreams"{% if nav == "upstreams" %} aria-current="page"{% endif %}>上游</a>
+        <a href="/nodes"{% if nav == "nodes" %} aria-current="page"{% endif %}>手动节点</a>
+        <a href="/groups"{% if nav == "groups" %} aria-current="page"{% endif %}>分组</a>
+        <a href="/rules"{% if nav == "rules" %} aria-current="page"{% endif %}>路由规则</a>
+        <a href="/aliases"{% if nav == "aliases" %} aria-current="page"{% endif %}>地区别名</a>
+        <a href="/general"{% if nav == "general" %} aria-current="page"{% endif %}>通用设置</a>
+        <a href="/backups"{% if nav == "backups" %} aria-current="page"{% endif %}>备份</a>
+      </nav>
+    </details>
+    <!-- 外观控件独立成一个 Frost root：主题按钮的点击委托只在本 root 内生效，
+         而它与主内容区的 root 共享同一套全页主题（Frost 用 WeakMap 支持多 root）。
+
+         主题是「三选一」的互斥选择，没有对应面板，因此用 radiogroup 语义而不是
+         Tabs（规范 §11.10 的 role=tab 必须 aria-controls 到 tabpanel，此处无面板）。
+         radiogroup 同样要求方向键在组内移动并由 Space/Enter 选中，见 app.js。 -->
+    <div class="appearance-controls" role="group" aria-label="外观设置" data-frost-root>
+      <div class="theme-switcher" role="radiogroup" aria-label="主题">
+        <button type="button" class="theme-btn" role="radio" data-theme-choice="light" aria-checked="false" aria-pressed="false" tabindex="-1" title="晨雾浅色">浅色</button>
+        <button type="button" class="theme-btn" role="radio" data-theme-choice="dark" aria-checked="false" aria-pressed="false" tabindex="-1" title="午夜深色">深色</button>
+        <button type="button" class="theme-btn" role="radio" data-theme-choice="system" aria-checked="true" aria-pressed="true" tabindex="0" title="跟随系统">跟随系统</button>
+      </div>
+    </div>
+  </div>
 </header>
-<main id="main" class="page">
+</header>
+<p id="theme-desc" class="sr-only" role="status" data-frost-theme-state>当前主题</p>
+<!-- data-frost-root 覆盖整个主内容区：输入框按 AGENTS.md §8 使用 .control-shell 包裹，
+     流光边框由 Frost 管理。顶部与业务同名的 .card/.badge/.empty 在 style.css 末尾做隔离。 -->
+<main id="main" class="page" data-frost-root>
 {% block content %}{% endblock %}
 </main>
 <footer class="app-footer">单人自用 · 本地部署 · 数据存于 <span class="mono">data/store.yaml</span></footer>
+<script>
+/* DOM 就绪后显式初始化 Frost（AGENTS.md §12.1）。首屏主题已由 head 中的
+   frost.js 同步设置；这里分别初始化两个 root：
+   1) 顶栏外观控件——绑定主题按钮；
+   2) 主内容区——让 .control-shell 输入框的流光生效。
+   两者共享同一套全页主题，互不覆盖。 */
+(function () {
+  if (!window.Frost) return;
+  document.querySelectorAll("[data-frost-root]").forEach(function (root) {
+    try { window.Frost.init(root); } catch (e) { /* 主题已生效，交互降级不影响阅读 */ }
+  });
+})();
+</script>
 </body>
 </html>

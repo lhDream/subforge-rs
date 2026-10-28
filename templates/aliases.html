@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}地区别名{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -35,13 +35,13 @@
       <div class="form-grid">
         <div class="field">
           <label for="new-al-region">地区名 <span class="req" aria-hidden="true">*</span></label>
-          <input id="new-al-region" type="text" name="region" required data-autofocus placeholder="香港" value="{{ form.value("", "region", "") }}" aria-describedby="new-al-region-hint{% if form.invalid("", "region") %} new-al-region-error{% endif %}"{% if form.invalid("", "region") %} aria-invalid="true"{% endif %}>
+          <div class="control-shell"><input class="control" id="new-al-region" type="text" name="region" required data-autofocus placeholder="香港" value="{{ form.value("", "region", "") }}" aria-describedby="new-al-region-hint{% if form.invalid("", "region") %} new-al-region-error{% endif %}"{% if form.invalid("", "region") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-al-region-hint">分组里 <span class="mono">regions</span> 写的就是这个名称。</p>
           {% if form.invalid("", "region") %}<p class="field-error" id="new-al-region-error">{{ form.error("", "region") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-al-aliases">别名 <span class="req" aria-hidden="true">*</span></label>
-          <input id="new-al-aliases" type="text" name="aliases" required placeholder="HK, Hong Kong, 🇭🇰, 港" value="{{ form.value("", "aliases", "") }}" aria-describedby="new-al-aliases-hint{% if form.invalid("", "aliases") %} new-al-aliases-error{% endif %}"{% if form.invalid("", "aliases") %} aria-invalid="true"{% endif %}>
+          <div class="control-shell"><input class="control" id="new-al-aliases" type="text" name="aliases" required placeholder="HK, Hong Kong, 🇭🇰, 港" value="{{ form.value("", "aliases", "") }}" aria-describedby="new-al-aliases-hint{% if form.invalid("", "aliases") %} new-al-aliases-error{% endif %}"{% if form.invalid("", "aliases") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-al-aliases-hint">逗号分隔。同一别名不得挂在两个地区下，否则保存会被拒绝。</p>
           {% if form.invalid("", "aliases") %}<p class="field-error" id="new-al-aliases-error">{{ form.error("", "aliases") }}</p>{% endif %}
         </div>

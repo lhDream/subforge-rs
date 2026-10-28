@@ -48,6 +48,11 @@ body {
   outline-color: var(--ui-focus-ring-color-inverse);
 }
 
+::selection {
+  background: var(--ui-selection-bg);
+  color: var(--ui-text-primary);
+}
+
 h1,
 h2,
 h3 {
@@ -179,25 +184,81 @@ ul.tight li {
 
 /* ---------------------------------------------------------------- 骨架 */
 
+/* 顶栏：通栏 sticky 容器。内部 .app-header-inner 是一张与 demo 一致的
+   圆角玻璃卡片；容器用页面底色，避免内容从卡片两侧的空隙透出。 */
 .app-header {
   position: sticky;
   top: 0;
   z-index: var(--ui-z-sticky);
+  background: var(--ui-bg-page);
+  padding: var(--ui-space-3) var(--ui-space-8);
+}
+
+/* 顶栏玻璃卡片：宽度与 .page 内容区对齐（同为 --ui-content-max-width），
+   实色是兜底，支持滤镜时由 .glass 升级为半透明 + 模糊。 */
+.app-header-inner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ui-space-2) var(--ui-space-6);
-  padding: var(--ui-space-2) var(--ui-space-8);
+  width: 100%;
+  max-width: var(--ui-content-max-width);
+  margin-inline: auto;
+  padding: var(--ui-space-3) var(--ui-space-5);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
   background: var(--ui-bg-surface);
-  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
+/* 品牌：图标方块 + 两行文字，与 demo 的 .brand / .brand-mark 结构一致 */
 .brand {
-  font-size: var(--ui-font-size-card-title);
-  font-weight: var(--ui-font-weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-3);
   color: var(--ui-text-primary);
   text-decoration: none;
-  padding: var(--ui-space-2) 0;
+  padding: var(--ui-space-1) 0;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-brand);
+  color: var(--ui-brand-on);
+}
+
+.brand-mark svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.brand-name {
+  font-size: 17px;
+  font-weight: var(--ui-font-weight-bold);
+  line-height: 1.2;
+}
+
+.brand-sub {
+  color: var(--ui-text-tertiary);
+  font-size: 10px;
+  font-weight: var(--ui-font-weight-medium);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
 }
 
 .nav-drawer {
@@ -232,34 +293,80 @@ ul.tight li {
   content: "▴";
 }
 
+/* 导航沿用 demo 的扁平文字链接语言：无胶囊背景、无圆角，
+   靠字号 / 间距 / 强调色区分层级（demo 的 .main-nav：gap 32px、13px、hover 变强调色）。 */
 .app-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ui-space-1);
+  /* 与 demo 的 .main-nav 一致：宽屏 32px 间距 */
+  gap: var(--ui-space-2) var(--ui-space-8);
 }
 
 .app-nav a {
   display: inline-flex;
   align-items: center;
   min-height: var(--ui-control-height);
-  padding: var(--ui-space-2) var(--ui-space-3);
-  border-radius: var(--ui-radius-control);
+  padding: var(--ui-space-1) 0;
+  border-bottom: 2px solid transparent;
   color: var(--ui-text-secondary);
   text-decoration: none;
+  font-size: 13px;
   font-weight: var(--ui-font-weight-regular);
 }
 
 .app-nav a:hover {
-  background: var(--ui-bg-subtle);
-  color: var(--ui-text-primary);
+  color: var(--ui-brand);
+  border-bottom-color: var(--ui-border-subtle);
 }
 
-/* 选中态同时使用颜色、背景、字重与标识线，不只改颜色（规范 §5.1） */
+/* 选中态：颜色 + 字重 + 底部标识线三重区分，不只靠颜色（规范 §5）；
+   扁平链接无圆角，标识线不会被圆角裁切。 */
 .app-nav a[aria-current="page"] {
-  background: var(--ui-bg-selected);
   color: var(--ui-brand);
   font-weight: var(--ui-font-weight-semibold);
-  box-shadow: inset 0 -2px 0 var(--ui-brand);
+  border-bottom-color: var(--ui-brand);
+}
+
+/* ---------------------------------------------------------------- 毛玻璃材质 */
+
+/* 玻璃容器：--surface 实色是「不支持滤镜 / 强制高对比度」时的必要兜底，
+ * 不是可选主题（AGENTS.md §7）。支持 backdrop-filter 时恒为半透明 + 模糊，
+ * 不提供材质开关，也不因「减少透明」偏好关闭玻璃。文字与子控件保持实色，
+ * 绝不依赖整块表面 opacity 模拟玻璃，避免文字与控件一起变透明。 */
+.glass,
+.card,
+.table-wrap,
+dialog.modal {
+  background: var(--ui-bg-surface);
+  border-color: var(--ui-border-subtle);
+  /* 玻璃容器内次要文字改用主要文字色，避免半透明背景削弱对比度（AGENTS.md §7） */
+  --ui-text-secondary: var(--text);
+  --ui-text-tertiary: var(--text);
+  --ui-text-placeholder: var(--text-muted);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .card,
+  .table-wrap,
+  dialog.modal {
+    background: linear-gradient(135deg, var(--glass-shine), transparent 70%), var(--ui-glass-bg);
+    border-color: var(--ui-glass-border);
+    -webkit-backdrop-filter: blur(var(--ui-glass-blur));
+    backdrop-filter: blur(var(--ui-glass-blur));
+  }
+}
+
+@media (forced-colors: active) {
+  :root .glass,
+  :root .card,
+  :root .table-wrap,
+  :root dialog.modal {
+    background: Canvas;
+    border-color: CanvasText;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .page {
@@ -290,6 +397,65 @@ ul.tight li {
   font-size: var(--ui-font-size-caption);
 }
 
+/* 外观设置：仅主题切换（无材质开关，毛玻璃恒开，AGENTS.md §7），推到顶栏右侧 */
+.appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-4);
+  margin-left: auto;
+}
+
+.theme-switcher {
+  display: inline-flex;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-1);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  /* 次容器使用半透明 --control-bg，共享外层玻璃（AGENTS.md §7） */
+  background: var(--ui-control-bg);
+}
+
+/* 分段式主题按钮（radiogroup 单选）：44px 触控目标（规范 §4 / §11.10 同规格），
+   选中态同时用背景 + 字重 + 边框表达，不只靠颜色（规范 §5）。 */
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid transparent;
+  border-radius: calc(var(--ui-radius-control) - 2px);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: var(--ui-line-height-body);
+  cursor: pointer;
+  transition:
+    background-color var(--ui-duration-button) var(--ui-ease-standard),
+    color var(--ui-duration-button) var(--ui-ease-standard);
+}
+
+.theme-btn:hover {
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-primary);
+}
+
+/* 选中态：同时驱动 aria-checked（radiogroup）与 aria-pressed（frost 同步） */
+.theme-btn[aria-checked="true"],
+.theme-btn[aria-pressed="true"] {
+  background: var(--ui-bg-selected);
+  color: var(--ui-brand);
+  font-weight: var(--ui-font-weight-semibold);
+  box-shadow: inset 0 0 0 1px var(--ui-brand);
+}
+
+/* 方向键在组内移动焦点时必须有可见指示（规范 §5 焦点不可丢失） */
+.theme-btn:focus-visible {
+  outline: var(--ui-focus-ring-width) solid var(--ui-focus-ring-color);
+  outline-offset: var(--ui-focus-ring-offset);
+}
+
 /* ---------------------------------------------------------------- 按钮 */
 
 button,
@@ -302,8 +468,9 @@ button,
   padding: var(--ui-space-2) var(--ui-space-5);
   border: 1px solid var(--ui-brand);
   border-radius: var(--ui-radius-control);
-  background: var(--ui-brand);
-  color: var(--ui-text-on-brand);
+  /* 主按钮：半透明 --button-bg，共享外层玻璃背景效果，不叠加模糊（AGENTS.md §7） */
+  background: var(--ui-button-bg);
+  color: var(--ui-button-text);
   font-family: inherit;
   font-size: var(--ui-font-size-base);
   font-weight: var(--ui-font-weight-medium);
@@ -311,48 +478,48 @@ button,
   text-decoration: none;
   cursor: pointer;
   transition:
-    background-color var(--ui-duration-button) var(--ui-ease-standard),
     border-color var(--ui-duration-button) var(--ui-ease-standard),
-    color var(--ui-duration-button) var(--ui-ease-standard);
+    box-shadow var(--ui-duration-button) var(--ui-ease-standard),
+    transform var(--ui-duration-button) var(--ui-ease-standard);
 }
 
 button:hover,
 .btn:hover {
-  background: var(--ui-brand-hover);
-  border-color: var(--ui-brand-hover);
-  color: var(--ui-text-on-brand);
+  border-color: var(--ui-brand);
+  box-shadow: var(--shadow-hover);
+  color: var(--ui-button-text);
 }
 
 button:active,
 .btn:active {
-  background: var(--ui-brand-active);
-  border-color: var(--ui-brand-active);
+  border-color: var(--ui-brand);
+  box-shadow: var(--shadow-selected);
 }
 
-/* 次要操作：描边按钮 */
+/* 次要操作：半透明 --control-bg 描边按钮（AGENTS.md §7） */
 button.ghost,
 .btn.ghost {
-  background: var(--ui-bg-surface);
+  background: var(--ui-control-bg);
   border-color: var(--ui-border-control);
   color: var(--ui-text-primary);
 }
 
 button.ghost:hover,
 .btn.ghost:hover {
-  background: var(--ui-bg-selected);
+  background: var(--surface-soft);
   border-color: var(--ui-brand);
-  color: var(--ui-brand);
+  color: var(--ui-text-primary);
 }
 
 button.ghost:active,
 .btn.ghost:active {
-  background: var(--ui-bg-selected);
+  background: var(--surface-soft);
 }
 
-/* 危险操作：独立配色，与普通操作可区分 */
+/* 危险操作：独立配色，与普通操作可区分；同样使用半透明填充 */
 button.danger,
 .btn.danger {
-  background: var(--ui-bg-surface);
+  background: var(--ui-control-bg);
   border-color: var(--ui-text-danger);
   color: var(--ui-text-danger);
 }
@@ -477,7 +644,8 @@ textarea {
   padding: var(--ui-space-2) var(--ui-space-3);
   border: 1px solid var(--ui-border-control);
   border-radius: var(--ui-radius-control);
-  background: var(--ui-bg-surface);
+  /* 输入控件：半透明 --control-bg，与按钮共享外层玻璃（AGENTS.md §7） */
+  background: var(--ui-control-bg);
   color: var(--ui-text-primary);
   font-family: var(--ui-font-sans);
   font-size: var(--ui-font-size-base);
@@ -625,6 +793,7 @@ fieldset + .hint,
 
 /* ---------------------------------------------------------------- 卡片 */
 
+/* 卡片：默认实色（AGENTS.md §7 基线），带 .glass 后升级为毛玻璃 */
 .card {
   background: var(--ui-bg-surface);
   border: 1px solid var(--ui-border-subtle);
@@ -964,6 +1133,7 @@ td.cell-actions .row-actions {
 
 /* ---------------------------------------------------------------- 弹窗 */
 
+/* 弹窗：默认实色（AGENTS.md §7 基线），带 .glass 后升级为毛玻璃 */
 dialog {
   width: min(var(--ui-dialog-width), calc(100vw - var(--ui-space-8)));
   padding: var(--ui-space-6);
@@ -975,7 +1145,7 @@ dialog {
 }
 
 dialog::backdrop {
-  background: var(--ui-backdrop);
+  background: var(--ui-glass-backdrop);
 }
 
 dialog h2 {
@@ -1037,7 +1207,7 @@ dialog.modal > form {
   gap: var(--ui-space-2);
   padding: var(--ui-space-4) var(--ui-space-6) var(--ui-space-6);
   border-top: 1px solid var(--ui-border-subtle);
-  background: var(--ui-bg-surface);
+  background: var(--surface-soft);
 }
 
 /* 页内表单形态：无 JS、?new=1 深链、或校验失败回填时的样子。
@@ -1051,7 +1221,11 @@ dialog.modal[open]:not([data-modal]) {
   padding: var(--ui-space-6);
   border: 1px solid var(--ui-border-subtle);
   border-radius: var(--ui-radius-card);
+  background: var(--surface-soft);
   box-shadow: none;
+  /* 页内形态是静态卡片，不应有毛玻璃（覆盖 .glass / dialog.modal 的 @supports 规则） */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   overflow: visible;
 }
 
@@ -1092,6 +1266,15 @@ dialog.modal[open]:not([data-modal]) [data-dialog-close] {
     padding-left: var(--ui-space-6);
     padding-right: var(--ui-space-6);
   }
+
+  /* 平板宽度收窄导航间距与卡片内边距，避免 8 个入口挤占品牌与外观控件 */
+  .app-nav {
+    gap: var(--ui-space-2) var(--ui-space-4);
+  }
+
+  .app-header-inner {
+    padding: var(--ui-space-2) var(--ui-space-4);
+  }
 }
 
 /* 手机：单列、抽屉导航、控件回到 44px */
@@ -1108,6 +1291,11 @@ dialog.modal[open]:not([data-modal]) [data-dialog-close] {
     padding: var(--ui-space-4);
   }
 
+  /* 窄屏顶栏卡片收紧内边距，给品牌与外观控件留出空间 */
+  .app-header-inner {
+    padding: var(--ui-space-3) var(--ui-space-4);
+  }
+
   .page {
     padding-top: var(--ui-space-4);
   }
@@ -1117,6 +1305,33 @@ dialog.modal[open]:not([data-modal]) [data-dialog-close] {
     flex-direction: column;
     align-items: stretch;
     margin-top: var(--ui-space-2);
+  }
+
+  /* 窄屏导航沿用 demo 的紧凑规格（间距 16px、字号 11px）。
+     抽屉内是纵向列表，底部标识线会被误读成分隔线，改用左侧色条。 */
+  .app-nav {
+    gap: var(--ui-space-1) var(--ui-space-4);
+  }
+
+  .app-nav a {
+    font-size: 11px;
+    border-bottom: 0;
+  }
+
+  .nav-drawer[open] > .app-nav a {
+    padding-inline: var(--ui-space-2);
+    border-inline-start: 2px solid transparent;
+  }
+
+  .nav-drawer[open] > .app-nav a[aria-current="page"] {
+    border-inline-start-color: var(--ui-brand);
+  }
+
+  /* 窄屏下外观控件与导航各占一行，避免挤压主内容 */
+  .appearance-controls {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .grid,
@@ -1155,6 +1370,93 @@ dialog.modal[open]:not([data-modal]) [data-dialog-close] {
   .nav-drawer > .app-nav {
     display: flex;
   }
+}
+
+/* ---------------------------------------------------------------- 深色适配 */
+
+/* 深色主题下用更贴合的滚动条与选中色，避免浅色滚动条刺眼。
+ * 纯装饰增强，浅色主题不受影响。 */
+:root[data-theme="dark"] {
+  scrollbar-color: var(--ui-border-control) transparent;
+}
+
+:root[data-theme="dark"] ::selection {
+  background: var(--ui-selection-bg);
+  color: var(--ui-text-primary);
+}
+
+/* 抽屉/弹窗里分隔用的细线在深色下改用玻璃边色，保持一致的轻边界观感 */
+:root[data-theme="dark"] .modal-foot {
+  border-top-color: var(--ui-glass-border);
+}
+
+:root[data-theme="dark"] .nav-drawer > summary {
+  border-color: var(--ui-border-control);
+}
+
+/* ---------------------------------------------------------------- Frost 接入隔离
+ *
+ * 主内容区带 data-frost-root，使输入框可以使用 AGENTS.md §8 的
+ * .field / .control-shell / .control 结构与流光边框。frost.css 的组件规则
+ * 用 :where() 包裹（零优先级），这里用业务专用选择器恢复被同名的
+ * .card / .badge / .empty / .field 覆盖掉的业务外观，避免引入 frost 的
+ * 卡片与标签视觉。输入框自身的流光保持启用。
+ * ------------------------------------------------------------------------- */
+
+/* 业务卡片：保留实色基线 + 玻璃升级，不套用 frost 的 .card 半透明填充 */
+:where([data-frost-root]) .card {
+  padding: var(--ui-space-6);
+  border-radius: var(--ui-radius-card);
+  border: 1px solid var(--ui-border-subtle);
+  background: var(--ui-bg-surface);
+  color: var(--ui-text-primary);
+  min-width: 0;
+}
+
+/* 业务徽标：沿用 --ui-* 状态色，不使用 frost 的 badge 配色 */
+:where([data-frost-root]) .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-bg-subtle);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  font-weight: var(--ui-font-weight-medium);
+  line-height: var(--ui-line-height-body);
+  white-space: nowrap;
+}
+
+/* 业务空状态：不用 frost 的 .empty 居中布局 */
+:where([data-frost-root]) .empty-state {
+  border: 1px dashed var(--ui-border-subtle);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-bg-surface);
+  padding: var(--ui-space-8) var(--ui-space-6);
+  margin-bottom: var(--ui-space-6);
+  text-align: center;
+  color: var(--ui-text-secondary);
+  display: block;
+}
+
+/* 业务字段容器保持纵向排布（frost 用 grid），标签间距沿用业务约定 */
+:where([data-frost-root]) .field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0;
+}
+
+/* 流光外壳内的原生控件：去掉 frost 默认 padding，避免与业务尺寸叠加 */
+:where([data-frost-root]) .control-shell > .control {
+  min-height: calc(var(--ui-control-height) - 2px);
+}
+
+/* 业务表单里的裸控件（未包 shell 的隐藏域等）不受影响 */
+:where([data-frost-root]) input[type="hidden"] {
+  display: none;
 }
 
 /* ---------------------------------------------------------------- 动效偏好 */

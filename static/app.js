@@ -695,5 +695,98 @@
     initGroupDrag();
     initNodePicker();
     initProfileDeps();
+    initThemeRadio();
   }
+
+  // ---------------------------------------------------------------- 主题单选组
+  //
+  // 主题是「三选一」的互斥选择，用 radiogroup 语义（而非 Tabs：规范 §11.10
+  // 的 role=tab 必须 aria-controls 指向 tabpanel，主题没有面板）。
+  // 主题值与偏好存储由 frost.js 统一管理；这里只补 radiogroup 所需的键盘交互
+  // 与 aria-checked 同步，不写入第二份主题状态。
+
+  function initThemeRadio() {
+    var group = document.querySelector('.theme-switcher[role="radiogroup"]');
+    if (!group) {
+      return;
+    }
+    var radios = Array.prototype.slice.call(group.querySelectorAll('[role="radio"]'));
+    if (radios.length === 0) {
+      return;
+    }
+
+    function currentChoice() {
+      var checked = radios.filter(function (r) {
+        return r.getAttribute("aria-checked") === "true";
+      })[0];
+      return checked || radios[0];
+    }
+
+    // 组内只保留一个 tabindex=0（roving tabindex），其余为 -1。
+    function syncTabindex(active) {
+      radios.forEach(function (radio) {
+        radio.tabIndex = radio === active ? 0 : -1;
+      });
+    }
+
+    // Frost 在主题变化时更新 aria-pressed，这里据此同步 aria-checked 与 tabindex，
+    // 使读屏播报的选中项始终与真实主题一致。
+    function syncChecked() {
+      radios.forEach(function (radio) {
+        var on = radio.getAttribute("aria-pressed") === "true";
+        radio.setAttribute("aria-checked", String(on));
+      });
+      syncTabindex(currentChoice());
+    }
+
+    radios.forEach(function (radio) {
+      radio.addEventListener("click", function () {
+        // Frost 的委托点击会切换主题并更新 aria-pressed；等它执行后再同步。
+        window.setTimeout(syncChecked, 0);
+      });
+      radio.addEventListener("keydown", function (event) {
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+        var index = radios.indexOf(radio);
+        var destination = null;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          destination = radios[(index + 1) % radios.length];
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          destination = radios[(index - 1 + radios.length) % radios.length];
+        } else if (event.key === "Home") {
+          destination = radios[0];
+        } else if (event.key === "End") {
+          destination = radios[radios.length - 1];
+        } else if (event.key === " " || event.key === "Enter") {
+          // Space 可能滚动页面，阻止默认行为后由 click 触发选中。
+          event.preventDefault();
+          radio.click();
+          return;
+        }
+        if (!destination) {
+          return;
+        }
+        event.preventDefault();
+        syncTabindex(destination);
+        destination.focus();
+      });
+    });
+
+    // 初始同步 + 跟随 Frost 后续的主题变化（如系统主题切换）。
+    syncChecked();
+    var themeRoot = document.querySelector(".appearance-controls[data-frost-root]");
+    if (themeRoot) {
+      // MutationObserver 只观察 aria-pressed，避免轮询。
+      var observer = new MutationObserver(function () {
+        syncChecked();
+      });
+      radios.forEach(function (radio) {
+        observer.observe(radio, { attributes: true, attributeFilter: ["aria-pressed"] });
+      });
+    }
+  }
+
+  // 主题 / 毛玻璃由 frost.js 统一管理（首屏由 head 中的 frost.js 同步设置，
+  // 交互由 base.html 的 Frost.init 绑定），app.js 不再维护第二套外观逻辑。
 })();

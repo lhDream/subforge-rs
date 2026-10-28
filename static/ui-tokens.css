@@ -11,32 +11,38 @@
  * ========================================================================== */
 
 :root {
+  color-scheme: light;
+
   /* ---------------------------------------------------------------------
    * 1. 颜色 · 品牌与主操作
+   *
+   * 主题色（页面背景 / 表面 / 文字 / 强调 / 边框 / 玻璃）统一由 frost.css 的
+   * 语义变量提供，这里只做 --ui-* → frost --* 的桥接，确保全站只有一套主题
+   * 来源（AGENTS.md §1、§6）。项目专属的间距、字号、状态色等仍在下方独立定义。
    * ------------------------------------------------------------------- */
-  --ui-brand: #2563eb;              /* 主按钮、链接、选中强调、焦点环 */
-  --ui-brand-hover: #1d4ed8;        /* 悬停：同色系加深，不改变语义 */
-  --ui-brand-active: #1e40af;       /* 按下：同色系加深 */
-  --ui-brand-on: #ffffff;           /* 品牌色之上的文字（约 5.17:1） */
+  --ui-brand: var(--accent);        /* 主按钮、链接、选中强调、焦点环 */
+  --ui-brand-hover: var(--accent);  /* 悬停：沿用强调色，不新增第三颜色 */
+  --ui-brand-active: var(--accent); /* 按下：沿用强调色 */
+  --ui-brand-on: var(--accent-text);
 
   /* 1.1 背景与表面 */
-  --ui-bg-page: #f8fafc;            /* 页面最底层背景 */
-  --ui-bg-surface: #ffffff;         /* 卡片、表单、弹窗、菜单 */
-  --ui-bg-subtle: #f1f5f9;          /* 表头、次要容器、悬停背景 */
-  --ui-bg-selected: #eff6ff;        /* 选中背景，搭配深蓝文字/图标 */
+  --ui-bg-page: var(--bg);          /* 页面最底层背景 */
+  --ui-bg-surface: var(--surface);  /* 仅用于无滤镜兜底与原生选择菜单选项 */
+  --ui-bg-subtle: var(--surface-soft);   /* 表头、次要容器、悬停背景（半透明） */
+  --ui-bg-selected: var(--surface-soft); /* 选中背景（半透明辅助填充） */
 
   /* 1.2 文字 */
-  --ui-text-primary: #0f172a;       /* 标题和主要内容 */
-  --ui-text-secondary: #475569;     /* 描述、标签和辅助信息 */
-  --ui-text-tertiary: #64748b;      /* 占位符、次要元信息（配页面底色约 4.55:1） */
-  --ui-text-placeholder: var(--ui-text-tertiary);
-  --ui-text-on-brand: var(--ui-brand-on);
-  --ui-text-link: var(--ui-brand);
-  --ui-text-link-hover: var(--ui-brand-hover);
+  --ui-text-primary: var(--text);         /* 标题和主要内容 */
+  --ui-text-secondary: var(--text-muted); /* 描述、标签和辅助信息 */
+  --ui-text-tertiary: var(--text-muted);  /* 占位符、次要元信息 */
+  --ui-text-placeholder: var(--text-muted);
+  --ui-text-on-brand: var(--accent-text);
+  --ui-text-link: var(--accent);
+  --ui-text-link-hover: var(--accent);
 
   /* 1.3 边框与分隔线 */
-  --ui-border-subtle: #e2e8f0;      /* 表格分隔、卡片边界；不得单独标识可操作控件 */
-  --ui-border-control: #8491a3;     /* 输入框等依靠边界识别的控件（配白色约 3.20:1） */
+  --ui-border-subtle: var(--border);
+  --ui-border-control: var(--control-border);
 
   /* 1.4 状态色（文字 / 背景成对使用，且必须同时提供文字或图标） */
   --ui-text-success: #15803d;
@@ -135,15 +141,16 @@
   --ui-dialog-max-height-dvh: 85dvh;/* 动态视口：移动端地址栏 / 软键盘弹出时同样成立 */
   --ui-checkbox-size: 1.25rem;
   --ui-backdrop: rgb(15 23 42 / 45%);
+  --ui-selection-bg: rgba(37, 99, 235, 0.18); /* 文本选区底色：品牌色低透明，深浅主题各自覆盖 */
   /* 光学校正：让复选框与首行文字视觉对齐（§4.1 允许不受 4px 尺度约束） */
   --ui-checkbox-optical-offset: 0.35rem;
 
   /* ---------------------------------------------------------------------
    * 5. 圆角与阴影
    * ------------------------------------------------------------------- */
-  --ui-radius-control: 8px;         /* 按钮、输入框、普通菜单项 */
-  --ui-radius-card: 12px;           /* 卡片、下拉面板 */
-  --ui-radius-panel: 12px;          /* 内容面板（同卡片层级） */
+  --ui-radius-control: 10px;        /* 按钮、输入框、普通菜单项 */
+  --ui-radius-card: 16px;           /* 卡片、下拉面板（规范 §6 统一 16px） */
+  --ui-radius-panel: 16px;          /* 内容面板（同卡片层级） */
   --ui-radius-dialog: 16px;         /* 弹窗、主要浮层 */
   --ui-radius-pill: 999px;          /* 胶囊标签 */
   --ui-radius-circle: 50%;          /* 头像、状态圆点 */
@@ -185,6 +192,147 @@
   --ui-breakpoint-sm: 768px;
   --ui-breakpoint-md: 1024px;
   --ui-breakpoint-lg: 1440px;
+
+  /* ---------------------------------------------------------------------
+   * 9. 毛玻璃材质（规范见 docs 顶部 AGENTS.md §7）
+   *
+   * 实色（--ui-bg-surface 等）是基线；只有浏览器支持 backdrop-filter
+   * 且用户未关闭、系统未要求减少透明时，才由 style.css 的
+   * @supports 规则升级为毛玻璃。模糊半径：桌面 16px，窄屏（<=640px）10px。
+   * 毛玻璃表面靠 --ui-glass-* 表达，避免把整块表面（含文字）变透明。
+   * ------------------------------------------------------------------- */
+  /* 组件填充统一来自 frost：主按钮 --button-bg、输入与次按钮 --control-bg（AGENTS.md §7） */
+  --ui-button-bg: var(--button-bg);
+  --ui-button-text: var(--accent-text);
+  --ui-control-bg: var(--control-bg);
+
+  --ui-glass-blur: var(--glass-blur);
+  --ui-glass-bg: var(--glass-bg);
+  --ui-glass-border: var(--glass-border);
+  --ui-glass-backdrop: rgba(15, 23, 42, 0.32);
+}
+
+/* ==========================================================================
+ * 深色主题（午夜深色）— AGENTS.md §6 强制要求「晨雾浅色 / 午夜深色」两套主题。
+ * 全部取值逐项重设，不直接反转浅色值；对比度按合成后背景复核（见 style.css）。
+ * 仅允许这两套主题，通过根元素 data-theme="light|dark" 表达。
+ * ========================================================================== */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 1.4 状态色：重新选择深色下仍可读的色值（文字 + 背景成对） */
+  --ui-text-success: #86efac;
+  --ui-bg-success: rgba(22, 101, 52, 0.22);
+  --ui-border-success: rgba(134, 239, 172, 0.45);
+  --ui-text-warning: #fcd34d;
+  --ui-bg-warning: rgba(161, 98, 7, 0.22);
+  --ui-border-warning: rgba(252, 211, 77, 0.45);
+  --ui-text-danger: #fda4af;
+  --ui-bg-danger: rgba(159, 18, 57, 0.22);
+  --ui-border-danger: rgba(253, 164, 175, 0.45);
+  --ui-text-info: #93c5fd;
+  --ui-bg-info: rgba(37, 99, 235, 0.22);
+  --ui-border-info: rgba(147, 197, 253, 0.45);
+
+  /* 1.5 禁用态 */
+  --ui-text-disabled: #5b6b73;
+  --ui-bg-disabled: #17253d;
+  --ui-border-disabled: rgba(184, 196, 216, 0.18);
+
+  /* 1.6 焦点环反向色（品牌色之上仍清晰） */
+  --ui-focus-ring-color-inverse: #0b1120;
+
+  /* 4. 阴影：深色下需要更明显的投影把浮层与背景分开 */
+  --ui-shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.40),
+    0 1px 3px rgba(0, 0, 0, 0.30);
+  --ui-shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.40);
+
+  /* 6. 遮罩：深色下稍浅，避免弹窗内容被压得过暗 */
+  --ui-backdrop: rgba(2, 6, 23, 0.62);
+
+  /* 9. 弹窗遮罩 / 文本选区（玻璃背景与边框由 frost 主题变量自动跟随） */
+  --ui-glass-backdrop: rgba(2, 6, 23, 0.55);
+  --ui-selection-bg: rgba(147, 197, 253, 0.30);
+}
+
+/* 无脚本时的系统深色主题：在 JS 设置 data-theme 之前，
+ * 跟随系统且系统为深色时即给出可阅读的深色页面（AGENTS.md §6 强制系统跟随）。
+ * JS 一旦运行，会用 data-theme 覆盖此规则，二者不会冲突。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --ui-text-success: #86efac;
+    --ui-bg-success: rgba(22, 101, 52, 0.22);
+    --ui-border-success: rgba(134, 239, 172, 0.45);
+    --ui-text-warning: #fcd34d;
+    --ui-bg-warning: rgba(161, 98, 7, 0.22);
+    --ui-border-warning: rgba(252, 211, 77, 0.45);
+    --ui-text-danger: #fda4af;
+    --ui-bg-danger: rgba(159, 18, 57, 0.22);
+    --ui-border-danger: rgba(253, 164, 175, 0.45);
+    --ui-text-info: #93c5fd;
+    --ui-bg-info: rgba(37, 99, 235, 0.22);
+    --ui-border-info: rgba(147, 197, 253, 0.45);
+
+    --ui-text-disabled: #5b6b73;
+    --ui-bg-disabled: #17253d;
+    --ui-border-disabled: rgba(184, 196, 216, 0.18);
+
+    --ui-focus-ring-color-inverse: #0b1120;
+
+    --ui-shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.40),
+      0 1px 3px rgba(0, 0, 0, 0.30);
+    --ui-shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.55),
+      0 4px 12px rgba(0, 0, 0, 0.40);
+
+    --ui-backdrop: rgba(2, 6, 23, 0.62);
+
+    --ui-glass-backdrop: rgba(2, 6, 23, 0.55);
+  }
+}
+
+/* 强制高对比度模式：交还给系统颜色，保留可见边界（AGENTS.md §5） */
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme] {
+    --ui-bg-page: Canvas;
+    --ui-bg-surface: Canvas;
+    --ui-bg-subtle: Canvas;
+    --ui-bg-selected: Highlight;
+    --ui-text-primary: CanvasText;
+    --ui-text-secondary: CanvasText;
+    --ui-text-tertiary: CanvasText;
+    --ui-text-link: LinkText;
+    --ui-text-link-hover: LinkText;
+    --ui-border-subtle: CanvasText;
+    --ui-border-control: ButtonText;
+    --ui-brand: Highlight;
+    --ui-brand-hover: Highlight;
+    --ui-brand-active: Highlight;
+    --ui-brand-on: HighlightText;
+    --ui-text-success: CanvasText;
+    --ui-text-warning: CanvasText;
+    --ui-text-danger: CanvasText;
+    --ui-text-info: CanvasText;
+    --ui-bg-success: Canvas;
+    --ui-bg-warning: Canvas;
+    --ui-bg-danger: Canvas;
+    --ui-bg-info: Canvas;
+    --ui-border-success: CanvasText;
+    --ui-border-warning: CanvasText;
+    --ui-border-danger: CanvasText;
+    --ui-border-info: CanvasText;
+    --ui-focus-ring-color: Highlight;
+    --ui-focus-ring-color-inverse: CanvasText;
+    --ui-shadow-menu: none;
+    --ui-shadow-dialog: none;
+    --ui-backdrop: transparent;
+    --ui-glass-bg: Canvas;
+    --ui-glass-border: CanvasText;
+    --ui-glass-backdrop: transparent;
+  }
 }
 
 /* 响应减少动态效果：取消非必要位移与缩放，保留静态进度与状态信息 */
@@ -192,5 +340,12 @@
   :root {
     --ui-duration-button: 1ms;
     --ui-duration-overlay: 1ms;
+  }
+}
+
+/* 窄屏毛玻璃模糊半径下调（AGENTS.md §7） */
+@media (max-width: 640px) {
+  :root {
+    --ui-glass-blur: 10px;
   }
 }

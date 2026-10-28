@@ -19,26 +19,26 @@
     <div class="form-grid">
       <div class="field">
         <label for="p-name">方案名 <span class="req" aria-hidden="true">*</span></label>
-        <input id="p-name" type="text" name="name" value="{{ form.value("", "name", name) }}" required placeholder="家庭网络"{% if form.invalid("", "name") %} aria-invalid="true" aria-describedby="p-name-error"{% endif %}>
+        <div class="control-shell"><input class="control" id="p-name" type="text" name="name" value="{{ form.value("", "name", name) }}" required placeholder="家庭网络"{% if form.invalid("", "name") %} aria-invalid="true" aria-describedby="p-name-error"{% endif %}></div>
         {% if form.invalid("", "name") %}<p class="field-error" id="p-name-error">{{ form.error("", "name") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="p-slug">slug（订阅地址里用）</label>
         {% if is_new %}
-        <input id="p-slug" type="text" name="slug" placeholder="home" value="{{ form.value("", "slug", "") }}" aria-describedby="p-slug-hint-new{% if form.invalid("", "slug") %} p-slug-error{% endif %}"{% if form.invalid("", "slug") %} aria-invalid="true"{% endif %}>
+        <div class="control-shell"><input class="control" id="p-slug" type="text" name="slug" placeholder="home" value="{{ form.value("", "slug", "") }}" aria-describedby="p-slug-hint-new{% if form.invalid("", "slug") %} p-slug-error{% endif %}"{% if form.invalid("", "slug") %} aria-invalid="true"{% endif %}></div>
         <p class="hint" id="p-slug-hint-new">留空按方案名自动生成；只允许小写字母、数字与连字符。</p>
         {% if form.invalid("", "slug") %}<p class="field-error" id="p-slug-error">{{ form.error("", "slug") }}</p>{% endif %}
         {% else %}
-        <input id="p-slug" type="text" value="{{ slug }}" disabled aria-describedby="p-slug-hint">
+        <div class="control-shell"><input class="control" id="p-slug" type="text" value="{{ slug }}" disabled aria-describedby="p-slug-hint"></div>
         <p class="hint" id="p-slug-hint">slug 创建后不可更改。当前订阅地址：<span class="mono">{{ sub_url }}</span></p>
         {% endif %}
       </div>
       <div class="field">
         <label for="p-on-failure">导出失败时</label>
-        <select id="p-on-failure" name="on_failure" aria-describedby="p-on-failure-hint">
+        <div class="control-shell"><select class="control" id="p-on-failure" name="on_failure" aria-describedby="p-on-failure-hint">
           <option value="fail"{% if form.selected("", "on_failure", on_failure, "fail") %} selected{% endif %}>严格失败（推荐）</option>
           <option value="last_good"{% if form.selected("", "on_failure", on_failure, "last_good") %} selected{% endif %}>回退到最近一次成功的配置</option>
-        </select>
+        </select></div>
         <p class="hint" id="p-on-failure-hint">
           无论哪种策略都<strong>不会自动降级到 DIRECT</strong>——那会静默改变你的隐私与路由意图。
           回退时响应头与预览页都会标出生成时间。
@@ -46,7 +46,7 @@
       </div>
       <div class="field">
         <label for="p-token">订阅令牌</label>
-        <input id="p-token" type="text" name="token" value="{{ form.value("", "token", token) }}" placeholder="留空则只用 Basic Auth" aria-describedby="p-token-hint{% if form.invalid("", "token") %} p-token-error{% endif %}"{% if form.invalid("", "token") %} aria-invalid="true"{% endif %}>
+        <div class="control-shell"><input class="control" id="p-token" type="text" name="token" value="{{ form.value("", "token", token) }}" placeholder="留空则只用 Basic Auth" aria-describedby="p-token-hint{% if form.invalid("", "token") %} p-token-error{% endif %}"{% if form.invalid("", "token") %} aria-invalid="true"{% endif %}></div>
         <button type="button" class="ghost small" data-generate-token="p-token" data-generate-save hidden>生成并保存令牌</button>
         <p class="hint" id="p-token-hint">
           <strong>外部客户端不会携带 Basic Auth，必须使用令牌</strong>，否则订阅地址会返回 401。
