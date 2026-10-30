@@ -233,8 +233,10 @@ pub fn validate_and_parse(
                     format!(
                         "{yaml_err}；也无法解析为分享链接列表\
                          （共 {} 行有效内容，均无法识别。若是机场按 UA 返回不同格式，\
-                         可尝试在通用设置中更换 User-Agent）",
-                        linked.total_lines
+                         说明该机场按 UA 拒绝本服务（当前 UA：{}），\
+                         需要在本机部署并配置出口代理访问）",
+                        linked.total_lines,
+                        USER_AGENT
                     ),
                 ));
             }

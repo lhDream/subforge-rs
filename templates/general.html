@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}通用设置{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -96,6 +96,15 @@
 
   <div class="card">
     <h2>上游访问代理</h2>
+    {% if on_workers %}
+    <div class="alert alert--warning" role="note">
+      <p class="alert-title">当前部署在 Cloudflare Workers，此代理设置不会生效</p>
+      <p>Workers 的 Fetch 不支持自定义出口代理，拉取上游时请求会直接从 Cloudflare 的出口发出。
+        如果某些上游返回 <span class="mono">403</span>，通常是因为对方封禁了机房/Worker 来源，
+        而不是上游本身故障：这类请求在本机或自有服务器上部署（走本机代理）即可恢复。
+        下方「当前正在生效」会如实显示为直连。</p>
+    </div>
+    {% endif %}
     <div class="field">
       <label class="check" for="g-proxy-enabled">
         <input id="g-proxy-enabled" type="checkbox" name="proxy_enabled" value="on"

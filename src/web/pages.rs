@@ -252,6 +252,9 @@ pub struct GeneralTpl {
     pub proxy_enabled: bool,
     pub proxy_url: String,
     pub proxy_effective: String,
+    /// 当前是否运行在 Cloudflare Workers：Fetch 不支持自定义出口代理，
+    /// 页面据此提示用户「代理设置不生效」，避免误以为是上游故障。
+    pub on_workers: bool,
     /// GeoIP 库的安装状态与自动更新设置。
     pub geoip: GeoipView,
     /// 提交失败时的回显与字段级错误；正常打开页面时为空。
@@ -2188,12 +2191,19 @@ fn general_tpl(
         proxy_enabled: form.checked("", "proxy_enabled", snapshot.settings.proxy.enabled),
         proxy_url: form.value("", "proxy_url", &snapshot.settings.proxy.url),
         proxy_effective: effective_proxy_view(state, snapshot),
+        on_workers: cfg!(target_arch = "wasm32"),
         geoip: geoip_view(state, snapshot, &form, notice),
         form,
     }
 }
 
 fn effective_proxy_view(state: &AppState, snapshot: &Store) -> String {
+    // Workers 的 Fetch 不支持自定义出口代理（见 src/proxy_wasm.rs）。
+    // 这里必须如实显示「直连」，否则用户会以为代理已生效，
+    // 而上游其实看到的是 Cloudflare 出口 IP，容易误判成上游故障。
+    if cfg!(target_arch = "wasm32") {
+        return "直连（Workers 不支持出口代理）".to_string();
+    }
     let proxy = if snapshot.settings.proxy.configured {
         snapshot
             .settings
