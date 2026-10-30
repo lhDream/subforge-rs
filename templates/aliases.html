@@ -37,13 +37,13 @@
           <label for="new-al-region">地区名 <span class="req" aria-hidden="true">*</span></label>
           <div class="control-shell"><input class="control" id="new-al-region" type="text" name="region" required data-autofocus placeholder="香港" value="{{ form.value("", "region", "") }}" aria-describedby="new-al-region-hint{% if form.invalid("", "region") %} new-al-region-error{% endif %}"{% if form.invalid("", "region") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-al-region-hint">分组里 <span class="mono">regions</span> 写的就是这个名称。</p>
-          {% if form.invalid("", "region") %}<p class="field-error" id="new-al-region-error">{{ form.error("", "region") }}</p>{% endif %}
+          {% if form.invalid("", "region") %}<p class="status status--error" id="new-al-region-error">{{ form.error("", "region") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-al-aliases">别名 <span class="req" aria-hidden="true">*</span></label>
           <div class="control-shell"><input class="control" id="new-al-aliases" type="text" name="aliases" required placeholder="HK, Hong Kong, 🇭🇰, 港" value="{{ form.value("", "aliases", "") }}" aria-describedby="new-al-aliases-hint{% if form.invalid("", "aliases") %} new-al-aliases-error{% endif %}"{% if form.invalid("", "aliases") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-al-aliases-hint">逗号分隔。同一别名不得挂在两个地区下，否则保存会被拒绝。</p>
-          {% if form.invalid("", "aliases") %}<p class="field-error" id="new-al-aliases-error">{{ form.error("", "aliases") }}</p>{% endif %}
+          {% if form.invalid("", "aliases") %}<p class="status status--error" id="new-al-aliases-error">{{ form.error("", "aliases") }}</p>{% endif %}
         </div>
       </div>
       <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
@@ -81,11 +81,11 @@
       <input form="alf-{{ a.index_id }}" type="hidden" name="csrf" value="{{ csrf }}">
       <input form="alf-{{ a.index_id }}" type="hidden" name="original_region" value="{{ a.region }}">
       <input form="alf-{{ a.index_id }}" type="text" name="region" value="{{ form.value(a.region, "region", a.region) }}" aria-labelledby="al-col-region"{% if form.invalid(a.region, "region") %} aria-invalid="true" aria-describedby="alf-region-{{ a.index_id }}-error"{% endif %}>
-      {% if form.invalid(a.region, "region") %}<p class="field-error" id="alf-region-{{ a.index_id }}-error">{{ form.error(a.region, "region") }}</p>{% endif %}
+      {% if form.invalid(a.region, "region") %}<p class="status status--error" id="alf-region-{{ a.index_id }}-error">{{ form.error(a.region, "region") }}</p>{% endif %}
     </td>
     <td>
       <input form="alf-{{ a.index_id }}" type="text" name="aliases" value="{{ form.value(a.region, "aliases", a.aliases) }}" aria-labelledby="al-col-aliases"{% if form.invalid(a.region, "aliases") %} aria-invalid="true" aria-describedby="alf-aliases-{{ a.index_id }}-error"{% endif %}>
-      {% if form.invalid(a.region, "aliases") %}<p class="field-error" id="alf-aliases-{{ a.index_id }}-error">{{ form.error(a.region, "aliases") }}</p>{% endif %}
+      {% if form.invalid(a.region, "aliases") %}<p class="status status--error" id="alf-aliases-{{ a.index_id }}-error">{{ form.error(a.region, "aliases") }}</p>{% endif %}
     </td>
     <td class="num">{{ a.count }}</td>
     <td class="cell-actions">

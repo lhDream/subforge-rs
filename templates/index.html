@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}方案{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -64,7 +64,7 @@
       <div class="mono">{{ p.sub_url }}</div>
       {% if !p.has_token %}
       <div class="hint">
-        <span class="field-error">未设订阅令牌</span>：外部客户端拉取会返回 401，
+        <span class="status status--error">未设订阅令牌</span>：外部客户端拉取会返回 401，
         <a href="/profiles/{{ p.slug }}">去方案页生成</a>。
       </div>
       {% endif %}

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}预览 · {{ slug }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -10,7 +10,7 @@
     <a class="btn small ghost" href="{{ sub_url }}" target="_blank" rel="noopener">打开订阅输出</a>
   </div>
   <p class="hint">预览不落盘。下面是本次导出会生成的完整结果与全部校验结论。
-    {% if !has_token %}<span class="field-error">当前方案未设订阅令牌，外部客户端拉取会返回 401。</span>{% endif %}
+    {% if !has_token %}<span class="status status--error">当前方案未设订阅令牌，外部客户端拉取会返回 401。</span>{% endif %}
   </p>
 </div>
 

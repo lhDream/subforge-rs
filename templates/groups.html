@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}分组{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -48,7 +48,7 @@
           <label for="new-g-name">分组名 <span class="req" aria-hidden="true">*</span></label>
           <div class="control-shell"><input class="control" id="new-g-name" type="text" name="name" required data-autofocus placeholder="美国节点" value="{{ form.value("", "name", "") }}" aria-describedby="new-g-name-hint{% if form.invalid("", "name") %} new-g-name-error{% endif %}"{% if form.invalid("", "name") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-g-name-hint">即 Clash 的 proxy-group 名；不能与内置策略（DIRECT / REJECT / PASS / GLOBAL）或任何节点重名。</p>
-          {% if form.invalid("", "name") %}<p class="field-error" id="new-g-name-error">{{ form.error("", "name") }}</p>{% endif %}
+          {% if form.invalid("", "name") %}<p class="status status--error" id="new-g-name-error">{{ form.error("", "name") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-g-type">类型</label>
@@ -124,7 +124,7 @@
           <label for="new-g-extra">额外 Clash 字段</label>
           <div class="control-shell"><input class="control" id="new-g-extra" type="text" name="extra_yaml" placeholder="tolerance: 50" value="{{ form.value("", "extra_yaml", "") }}" aria-describedby="new-g-extra-hint{% if form.invalid("", "extra_yaml") %} new-g-extra-error{% endif %}"{% if form.invalid("", "extra_yaml") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-g-extra-hint">YAML 片段，原样写进该 proxy-group。</p>
-          {% if form.invalid("", "extra_yaml") %}<p class="field-error" id="new-g-extra-error">{{ form.error("", "extra_yaml") }}</p>{% endif %}
+          {% if form.invalid("", "extra_yaml") %}<p class="status status--error" id="new-g-extra-error">{{ form.error("", "extra_yaml") }}</p>{% endif %}
         </div>
       </div>
 
@@ -243,7 +243,7 @@
           <label for="gf-name-{{ g.index_id }}">分组名 <span class="req" aria-hidden="true">*</span></label>
           <div class="control-shell"><input class="control" id="gf-name-{{ g.index_id }}" type="text" name="name" value="{{ form.value(g.name, "name", g.name) }}" required aria-describedby="gf-name-{{ g.index_id }}-hint{% if form.invalid(g.name, "name") %} gf-name-{{ g.index_id }}-error{% endif %}"{% if form.invalid(g.name, "name") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="gf-name-{{ g.index_id }}-hint">改名会级联改写其他分组、规则与方案里的全部引用。</p>
-          {% if form.invalid(g.name, "name") %}<p class="field-error" id="gf-name-{{ g.index_id }}-error">{{ form.error(g.name, "name") }}</p>{% endif %}
+          {% if form.invalid(g.name, "name") %}<p class="status status--error" id="gf-name-{{ g.index_id }}-error">{{ form.error(g.name, "name") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="gf-type-{{ g.index_id }}">类型</label>
@@ -314,7 +314,7 @@
           <label for="gf-extra-{{ g.index_id }}">额外 Clash 字段</label>
           <div class="control-shell"><input class="control" id="gf-extra-{{ g.index_id }}" type="text" name="extra_yaml" placeholder="tolerance: 50" value="{{ form.value(g.name, "extra_yaml", g.extra_yaml) }}" aria-describedby="gf-extra-{{ g.index_id }}-hint{% if form.invalid(g.name, "extra_yaml") %} gf-extra-{{ g.index_id }}-error{% endif %}"{% if form.invalid(g.name, "extra_yaml") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="gf-extra-{{ g.index_id }}-hint">YAML 片段，原样写进该 proxy-group。</p>
-          {% if form.invalid(g.name, "extra_yaml") %}<p class="field-error" id="gf-extra-{{ g.index_id }}-error">{{ form.error(g.name, "extra_yaml") }}</p>{% endif %}
+          {% if form.invalid(g.name, "extra_yaml") %}<p class="status status--error" id="gf-extra-{{ g.index_id }}-error">{{ form.error(g.name, "extra_yaml") }}</p>{% endif %}
         </div>
       </div>
 

@@ -22,17 +22,17 @@
       <div class="field">
         <label for="g-mixed-port">mixed-port</label>
         <div class="control-shell"><input class="control" id="g-mixed-port" type="number" min="1" max="65535" inputmode="numeric" name="mixed-port" value="{{ mixed_port }}" placeholder="7890" aria-describedby="g-common-hint{% if form.invalid("", "mixed-port") %} g-mixed-port-error{% endif %}"{% if form.invalid("", "mixed-port") %} aria-invalid="true"{% endif %}></div>
-        {% if form.invalid("", "mixed-port") %}<p class="field-error" id="g-mixed-port-error">{{ form.error("", "mixed-port") }}</p>{% endif %}
+        {% if form.invalid("", "mixed-port") %}<p class="status status--error" id="g-mixed-port-error">{{ form.error("", "mixed-port") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="g-socks-port">socks-port</label>
         <div class="control-shell"><input class="control" id="g-socks-port" type="number" min="1" max="65535" inputmode="numeric" name="socks-port" value="{{ socks_port }}" aria-describedby="g-common-hint{% if form.invalid("", "socks-port") %} g-socks-port-error{% endif %}"{% if form.invalid("", "socks-port") %} aria-invalid="true"{% endif %}></div>
-        {% if form.invalid("", "socks-port") %}<p class="field-error" id="g-socks-port-error">{{ form.error("", "socks-port") }}</p>{% endif %}
+        {% if form.invalid("", "socks-port") %}<p class="status status--error" id="g-socks-port-error">{{ form.error("", "socks-port") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="g-port">port</label>
         <div class="control-shell"><input class="control" id="g-port" type="number" min="1" max="65535" inputmode="numeric" name="port" value="{{ port }}" aria-describedby="g-common-hint{% if form.invalid("", "port") %} g-port-error{% endif %}"{% if form.invalid("", "port") %} aria-invalid="true"{% endif %}></div>
-        {% if form.invalid("", "port") %}<p class="field-error" id="g-port-error">{{ form.error("", "port") }}</p>{% endif %}
+        {% if form.invalid("", "port") %}<p class="status status--error" id="g-port-error">{{ form.error("", "port") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="g-mode">mode</label>
@@ -72,7 +72,7 @@
         <span class="mono">dns</span>、<span class="mono">tun</span>、<span class="mono">rule-providers</span>
         等低频项在这里维护。上面表单已有的键不得重复出现，重复会直接报错而不是静默覆盖。
       </p>
-      {% if form.invalid("", "advanced_yaml") %}<p class="field-error" id="g-advanced-error">{{ form.error("", "advanced_yaml") }}</p>{% endif %}
+      {% if form.invalid("", "advanced_yaml") %}<p class="status status--error" id="g-advanced-error">{{ form.error("", "advanced_yaml") }}</p>{% endif %}
     </div>
   </div>
 
@@ -89,7 +89,7 @@
           通过反向代理对外提供 HTTPS 时，这里必须填外部地址；末尾斜杠会自动去掉。
           该设置只影响页面展示，不会进入导出结果。
         </p>
-        {% if form.invalid("", "base_url") %}<p class="field-error" id="g-base-url-error">{{ form.error("", "base_url") }}</p>{% endif %}
+        {% if form.invalid("", "base_url") %}<p class="status status--error" id="g-base-url-error">{{ form.error("", "base_url") }}</p>{% endif %}
       </div>
     </div>
   </div>
@@ -107,7 +107,7 @@
              placeholder="socks5://127.0.0.1:7891 或 http://127.0.0.1:7890"
              aria-describedby="g-proxy-hint{% if form.invalid("", "proxy_url") %} g-proxy-error{% endif %}"{% if form.invalid("", "proxy_url") %} aria-invalid="true"{% endif %}>
       <p class="hint" id="g-proxy-hint">只支持 http(s):// 与 socks5(h):// 且必须写端口。通常填本机 Mihomo/Clash 的 mixed-port；拉下来的 ss/vmess 等节点不能直接当代理。保存后立即生效，不需要重启服务。</p>
-      {% if form.invalid("", "proxy_url") %}<p class="field-error" id="g-proxy-error">{{ form.error("", "proxy_url") }}</p>{% endif %}
+      {% if form.invalid("", "proxy_url") %}<p class="status status--error" id="g-proxy-error">{{ form.error("", "proxy_url") }}</p>{% endif %}
       <p class="hint">当前正在生效：<strong class="mono">{{ proxy_effective }}</strong>{% if !self.proxy_enabled && proxy_url.len() > 0 %}（已填写但未启用）{% endif %}</p>
     </div>
   </div>
@@ -177,7 +177,7 @@
     <dd>
       {{ geoip.last_attempt }}
       {% if geoip.last_error.len() > 0 %}
-      <div class="field-error">{{ geoip.last_error_kind }}：{{ geoip.last_error }}</div>
+      <div class="status status--error">{{ geoip.last_error_kind }}：{{ geoip.last_error }}</div>
       {% endif %}
     </dd>
     <dt>最近一次成功</dt>
@@ -204,7 +204,7 @@
         <p class="hint" id="g-geoip-interval-hint">
           取值 1–365 天。启动后先检查一次；源站内容未变时用条件请求（304）跳过下载。
         </p>
-        {% if form.invalid("geoip", "geoip_interval_days") %}<p class="field-error" id="g-geoip-interval-error">{{ form.error("geoip", "geoip_interval_days") }}</p>{% endif %}
+        {% if form.invalid("geoip", "geoip_interval_days") %}<p class="status status--error" id="g-geoip-interval-error">{{ form.error("geoip", "geoip_interval_days") }}</p>{% endif %}
         <label class="check" for="g-geoip-auto">
           <input id="g-geoip-auto" type="checkbox" name="geoip_auto_update"
                  {% if geoip.auto_update %}checked="checked"{% endif %}>
@@ -223,7 +223,7 @@
           <span class="mono">.mmdb.gz</span>。自定义地址里的 token 只保存在本机 store.yaml，
           页面与日志会脱敏。
         </p>
-        {% if form.invalid("geoip", "geoip_custom_url") %}<p class="field-error" id="g-geoip-url-error">{{ form.error("geoip", "geoip_custom_url") }}</p>{% endif %}
+        {% if form.invalid("geoip", "geoip_custom_url") %}<p class="status status--error" id="g-geoip-url-error">{{ form.error("geoip", "geoip_custom_url") }}</p>{% endif %}
       </div>
     </div>
     <div class="form-actions">

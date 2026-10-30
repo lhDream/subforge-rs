@@ -134,7 +134,7 @@
 
   /* 组件级尺寸：集中管理，避免样式里散落字面量 */
   --ui-grid-min-column: 15rem;      /* 自动网格的最小列宽 */
-  --ui-textarea-min-height: 6rem;
+  --ui-textarea-min-height: 128px;  /* 与 frost 的 textarea.control 最小高度一致 */
   --ui-code-block-max-height: 32rem;
   --ui-select-list-max-height: 18rem;
   --ui-table-min-width: 48rem;      /* 宽表在滚动区域内的最小宽度 */

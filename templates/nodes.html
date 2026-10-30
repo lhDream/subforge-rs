@@ -34,7 +34,7 @@
         <label for="new-node-links">分享链接 <span class="req" aria-hidden="true">*</span></label>
         <div class="control-shell"><textarea class="control" id="new-node-links" name="links" rows="8" required data-autofocus placeholder="ss://...#香港01&#10;vmess://..." aria-describedby="new-node-links-hint{% if form.invalid("", "links") %} new-node-links-error{% endif %}"{% if form.invalid("", "links") %} aria-invalid="true"{% endif %}>{{ form.value("", "links", "") }}</textarea></div>
         <p class="hint" id="new-node-links-hint">每行一条；空行与 <span class="mono">#</span> 开头的行会被忽略。不支持的协议或格式错误会整批拒绝并指出行号。</p>
-        {% if form.invalid("", "links") %}<p class="field-error" id="new-node-links-error">{{ form.error("", "links") }}</p>{% endif %}
+        {% if form.invalid("", "links") %}<p class="status status--error" id="new-node-links-error">{{ form.error("", "links") }}</p>{% endif %}
       </div>
       <p class="hint">标 <span class="req" aria-hidden="true">*</span> 的为必填。</p>
     </div>
@@ -72,7 +72,7 @@
       <span class="mono">{{ n.name }}</span>
       {% else %}
       <span class="badge">解析失败</span>
-      <p class="field-error">{{ n.parse_error }}</p>
+      <p class="status status--error">{{ n.parse_error }}</p>
       {% endif %}
     </td>
     <td>{% if n.kind.is_empty() %}—{% else %}<span class="mono">{{ n.kind }}</span>{% endif %}</td>

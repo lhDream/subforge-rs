@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}{% if is_new %}新建方案{% else %}编辑方案{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -20,14 +20,14 @@
       <div class="field">
         <label for="p-name">方案名 <span class="req" aria-hidden="true">*</span></label>
         <div class="control-shell"><input class="control" id="p-name" type="text" name="name" value="{{ form.value("", "name", name) }}" required placeholder="家庭网络"{% if form.invalid("", "name") %} aria-invalid="true" aria-describedby="p-name-error"{% endif %}></div>
-        {% if form.invalid("", "name") %}<p class="field-error" id="p-name-error">{{ form.error("", "name") }}</p>{% endif %}
+        {% if form.invalid("", "name") %}<p class="status status--error" id="p-name-error">{{ form.error("", "name") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="p-slug">slug（订阅地址里用）</label>
         {% if is_new %}
         <div class="control-shell"><input class="control" id="p-slug" type="text" name="slug" placeholder="home" value="{{ form.value("", "slug", "") }}" aria-describedby="p-slug-hint-new{% if form.invalid("", "slug") %} p-slug-error{% endif %}"{% if form.invalid("", "slug") %} aria-invalid="true"{% endif %}></div>
         <p class="hint" id="p-slug-hint-new">留空按方案名自动生成；只允许小写字母、数字与连字符。</p>
-        {% if form.invalid("", "slug") %}<p class="field-error" id="p-slug-error">{{ form.error("", "slug") }}</p>{% endif %}
+        {% if form.invalid("", "slug") %}<p class="status status--error" id="p-slug-error">{{ form.error("", "slug") }}</p>{% endif %}
         {% else %}
         <div class="control-shell"><input class="control" id="p-slug" type="text" value="{{ slug }}" disabled aria-describedby="p-slug-hint"></div>
         <p class="hint" id="p-slug-hint">slug 创建后不可更改。当前订阅地址：<span class="mono">{{ sub_url }}</span></p>
@@ -53,7 +53,7 @@
           令牌只能读取本方案的订阅，不能访问管理功能；留空时只能在本机已登录的浏览器里使用。
           「生成并保存令牌」会连同本页其他修改一起保存。
         </p>
-        {% if form.invalid("", "token") %}<p class="field-error" id="p-token-error">{{ form.error("", "token") }}</p>{% endif %}
+        {% if form.invalid("", "token") %}<p class="status status--error" id="p-token-error">{{ form.error("", "token") }}</p>{% endif %}
       </div>
     </div>
   </div>
@@ -141,7 +141,7 @@
   </p>
   {% if token.len() == 0 %}
   <div class="hint">
-    <span class="field-error">未设订阅令牌</span>：外部客户端拉取会返回 401。请在上方生成令牌并保存。
+    <span class="status status--error">未设订阅令牌</span>：外部客户端拉取会返回 401。请在上方生成令牌并保存。
   </div>
   {% endif %}
   <div class="row-actions">

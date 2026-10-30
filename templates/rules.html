@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}路由规则{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -37,37 +37,37 @@
             <option value="normal"{% if form.selected("", "section", "normal", "normal") %} selected{% endif %}>normal —— 普通路由</option>
             <option value="final"{% if form.selected("", "section", "normal", "final") %} selected{% endif %}>final —— 最终兜底（MATCH）</option>
           </select></div>
-          {% if form.invalid("", "section") %}<p class="field-error" id="new-r-section-error">{{ form.error("", "section") }}</p>{% endif %}
+          {% if form.invalid("", "section") %}<p class="status status--error" id="new-r-section-error">{{ form.error("", "section") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-r-type">类型</label>
           <div class="control-shell"><input class="control" id="new-r-type" type="text" name="type" placeholder="DOMAIN-SUFFIX / GEOIP / IP-CIDR / MATCH" value="{{ form.value("", "type", "") }}" aria-describedby="new-r-type-hint{% if form.invalid("", "type") %} new-r-type-error{% endif %}"{% if form.invalid("", "type") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-r-type-hint">留空并填写下面的「原始规则」时，本字段被忽略。</p>
-          {% if form.invalid("", "type") %}<p class="field-error" id="new-r-type-error">{{ form.error("", "type") }}</p>{% endif %}
+          {% if form.invalid("", "type") %}<p class="status status--error" id="new-r-type-error">{{ form.error("", "type") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-r-payload">内容</label>
           <div class="control-shell"><input class="control" id="new-r-payload" type="text" name="payload" placeholder="openai.com / CN / 1.2.3.0/24" value="{{ form.value("", "payload", "") }}" aria-describedby="new-r-payload-hint{% if form.invalid("", "payload") %} new-r-payload-error{% endif %}"{% if form.invalid("", "payload") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-r-payload-hint">MATCH 没有内容，留空即可。</p>
-          {% if form.invalid("", "payload") %}<p class="field-error" id="new-r-payload-error">{{ form.error("", "payload") }}</p>{% endif %}
+          {% if form.invalid("", "payload") %}<p class="status status--error" id="new-r-payload-error">{{ form.error("", "payload") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-r-target">目标</label>
           <div class="control-shell"><input class="control" id="new-r-target" type="text" name="target" list="group-list" placeholder="分组名 / DIRECT / REJECT" value="{{ form.value("", "target", "") }}"{% if form.invalid("", "target") %} aria-invalid="true" aria-describedby="new-r-target-error"{% endif %}></div>
           <datalist id="group-list">{% for g in group_names %}<option value="{{ g }}"></option>{% endfor %}</datalist>
-          {% if form.invalid("", "target") %}<p class="field-error" id="new-r-target-error">{{ form.error("", "target") }}</p>{% endif %}
+          {% if form.invalid("", "target") %}<p class="status status--error" id="new-r-target-error">{{ form.error("", "target") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-r-params">附加参数</label>
           <div class="control-shell"><input class="control" id="new-r-params" type="text" name="params" placeholder="no-resolve" value="{{ form.value("", "params", "") }}" aria-describedby="new-r-params-hint{% if form.invalid("", "params") %} new-r-params-error{% endif %}"{% if form.invalid("", "params") %} aria-invalid="true"{% endif %}></div>
           <p class="hint" id="new-r-params-hint">逗号分隔。参数写在目标<strong>之后</strong>：<span class="mono">IP-CIDR,1.2.3.0/24,目标,no-resolve</span>；写成目标在末尾会让 Mihomo 把 <span class="mono">no-resolve</span> 当成目标。</p>
-          {% if form.invalid("", "params") %}<p class="field-error" id="new-r-params-error">{{ form.error("", "params") }}</p>{% endif %}
+          {% if form.invalid("", "params") %}<p class="status status--error" id="new-r-params-error">{{ form.error("", "params") }}</p>{% endif %}
         </div>
         <div class="field">
           <label for="new-r-raw">原始规则（可选）</label>
           <input id="new-r-raw" type="text" name="raw" class="code" placeholder="AND,((NETWORK,tcp)),PROXY" value="{{ form.value("", "raw", "") }}" aria-describedby="new-r-raw-hint{% if form.invalid("", "raw") %} new-r-raw-error{% endif %}"{% if form.invalid("", "raw") %} aria-invalid="true"{% endif %}>
           <p class="hint" id="new-r-raw-hint">填了则忽略上面的类型 / 内容 / 参数。原始模式不参与分组引用检查与目标校验。</p>
-          {% if form.invalid("", "raw") %}<p class="field-error" id="new-r-raw-error">{{ form.error("", "raw") }}</p>{% endif %}
+          {% if form.invalid("", "raw") %}<p class="status status--error" id="new-r-raw-error">{{ form.error("", "raw") }}</p>{% endif %}
         </div>
       </div>
     </div>
@@ -94,7 +94,7 @@
           <option value="normal"{% if form.selected("import", "section", "normal", "normal") %} selected{% endif %}>normal —— 普通路由</option>
           <option value="final"{% if form.selected("import", "section", "normal", "final") %} selected{% endif %}>final —— 最终兜底</option>
         </select></div>
-        {% if form.invalid("import", "section") %}<p class="field-error" id="import-section-error">{{ form.error("import", "section") }}</p>{% endif %}
+        {% if form.invalid("import", "section") %}<p class="status status--error" id="import-section-error">{{ form.error("import", "section") }}</p>{% endif %}
       </div>
       <div class="field">
         <label for="import-text">每行一条规则 <span class="req" aria-hidden="true">*</span></label>
@@ -102,7 +102,7 @@
 GEOIP,CN,DIRECT
 MATCH,自动选择" aria-describedby="import-text-hint{% if form.invalid("import", "text") %} import-text-error{% endif %}"{% if form.invalid("import", "text") %} aria-invalid="true"{% endif %}>{{ form.value("import", "text", "") }}</textarea>
         <p class="hint" id="import-text-hint">以 # 开头的行视为注释。</p>
-        {% if form.invalid("import", "text") %}<p class="field-error" id="import-text-error">{{ form.error("import", "text") }}</p>{% endif %}
+        {% if form.invalid("import", "text") %}<p class="status status--error" id="import-text-error">{{ form.error("import", "text") }}</p>{% endif %}
       </div>
     </div>
     <div class="modal-foot">

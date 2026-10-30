@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}编辑上游配置{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -20,7 +20,7 @@
       <label for="upstream-body">配置原文</label>
       <textarea id="upstream-body" class="code" name="body" rows="24" spellcheck="false" required aria-describedby="upstream-body-hint{% if form.invalid(id, "body") %} upstream-body-error{% endif %}"{% if form.invalid(id, "body") %} aria-invalid="true"{% endif %}>{{ form.value(id, "body", body) }}</textarea>
       <p class="hint" id="upstream-body-hint">保留原始正文空白；校验失败不会覆盖旧缓存。保存成功会清除远端 ETag、Last-Modified 与旧强制接受标记。</p>
-      {% if form.invalid(id, "body") %}<p class="field-error" id="upstream-body-error">{{ form.error(id, "body") }}</p>{% endif %}
+      {% if form.invalid(id, "body") %}<p class="status status--error" id="upstream-body-error">{{ form.error(id, "body") }}</p>{% endif %}
     </div>
     <div class="modal-foot"><button>校验并保存到缓存</button></div>
   </form>
