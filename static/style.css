@@ -1193,6 +1193,43 @@ td.cell-actions .row-actions {
   color: var(--ui-text-danger);
 }
 
+/* 折叠面板（规范 §8 的 .accordion / .accordion-content 接口）。
+   用于「按需展开的次要内容」；导航抽屉与实体编辑卡是导航/主编辑区，
+   语义上不属于折叠面板，未套用此类。 */
+.accordion {
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-control-bg);
+}
+
+.accordion + .accordion {
+  margin-top: var(--ui-space-2);
+}
+
+.accordion > summary {
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-3) var(--ui-space-4);
+  color: var(--ui-text-primary);
+  font-weight: var(--ui-font-weight-semibold);
+  cursor: pointer;
+}
+
+.accordion[open] > summary {
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.accordion-content {
+  padding: var(--ui-space-4);
+}
+
+.accordion-content > :first-child {
+  margin-top: 0;
+}
+
+.accordion-content > :last-child {
+  margin-bottom: 0;
+}
+
 /* 操作结果提示：短暂出现，明确告知成功/失败（无 JS 时不显示）。 */
 .status-toast {
   position: fixed;

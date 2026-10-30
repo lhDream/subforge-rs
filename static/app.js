@@ -220,21 +220,32 @@
 
   var statusToastTimer = null;
 
-  // 操作结果用页面底部的短暂提示明确告知，而不是只改按钮文字。
-  // kind: "ok" | "warn" | "error"
+  // 操作结果提示：优先走 Frost 的规范 toast（AGENTS.md §11.14）——
+  // 它自带 role=status/alert、aria-atomic、5 秒自动关闭、悬停与聚焦暂停、
+  // 错误常驻，以及手动关闭按钮。只有 Frost 未初始化时才退回本地降级实现。
+  // kind: "ok" | "success" | "warn" | "info" | "error"
   function showStatusToast(message, kind) {
+    var tone = kind === "ok" || kind === "success" ? "success"
+      : kind === "error" ? "error"
+      : "info";
+    var ui = window.__frostUI;
+    if (ui && typeof ui.toast === "function") {
+      ui.toast(message, { tone: tone });
+      return;
+    }
+    // 降级：Frost 不可用时仍给出可见反馈，不静默吞掉操作结果。
     var toast = document.getElementById("status-toast");
     if (!toast) {
       toast = document.createElement("div");
       toast.id = "status-toast";
       toast.className = "status-toast";
-      toast.setAttribute("role", "status");
+      toast.setAttribute("role", tone === "error" ? "alert" : "status");
       toast.setAttribute("aria-live", "polite");
       document.body.appendChild(toast);
     }
     toast.textContent = message;
     toast.classList.toggle("warn", kind === "warn");
-    toast.classList.toggle("error", kind === "error");
+    toast.classList.toggle("error", tone === "error");
     toast.hidden = false;
     window.clearTimeout(statusToastTimer);
     statusToastTimer = window.setTimeout(function () {

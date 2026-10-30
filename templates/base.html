@@ -7,12 +7,12 @@
 <title>{% block title %}方案{% endblock %} · SubForge.rs</title>
 <!-- 先加载 frost.js（不带 async / defer）：在样式之前同步确定首屏主题，避免先展示
      错误主题再切换（AGENTS.md §6、§12）。它提供 window.Frost 全局，非 ESM。 -->
-<script src="/static/frost.js?v=20261030-1"></script>
+<script src="/static/frost.js?v=20261030-2"></script>
 <!-- Frost 设计系统：主题变量定义在 html，组件规则限定在 [data-frost-root] 内。 -->
-<link rel="stylesheet" href="/static/frost.css?v=20261030-1">
+<link rel="stylesheet" href="/static/frost.css?v=20261030-2">
 <!-- 项目样式入口（内含 @import "ui-tokens.css"），全部消费 frost 的语义变量。 -->
-<link rel="stylesheet" href="/static/style.css?v=20261030-1">
-<script src="/static/app.js?v=20261030-1" defer></script>
+<link rel="stylesheet" href="/static/style.css?v=20261030-2">
+<script src="/static/app.js?v=20261030-2" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -56,7 +56,6 @@
     </div>
   </div>
 </header>
-</header>
 <p id="theme-desc" class="sr-only" role="status" data-frost-theme-state>当前主题</p>
 <!-- data-frost-root 覆盖整个主内容区：输入框按 AGENTS.md §8 使用 .control-shell 包裹，
      流光边框由 Frost 管理。顶部与业务同名的 .card/.badge/.empty 在 style.css 末尾做隔离。 -->
@@ -73,7 +72,14 @@
 (function () {
   if (!window.Frost) return;
   document.querySelectorAll("[data-frost-root]").forEach(function (root) {
-    try { window.Frost.init(root); } catch (e) { /* 主题已生效，交互降级不影响阅读 */ }
+    try {
+      var controller = window.Frost.init(root);
+      // 主内容区的控制器兼作全站唯一通知入口（AGENTS.md §8 建议共用一个
+      // 通知控制器）；app.js 的操作反馈通过它调用规范的 toast。
+      if (controller && root.matches("main[data-frost-root]")) {
+        window.__frostUI = controller;
+      }
+    } catch (e) { /* 主题已生效，交互降级不影响阅读 */ }
   });
 })();
 </script>
